@@ -1,7 +1,5 @@
-fastapi
-uvicorn
 selenium
-webdriver-manager
-python-dotenv
-requests
-pydantic
+websockets
+undetected-chromedriver
+pillow
+asyncio
