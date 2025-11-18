@@ -1,25 +1,39 @@
-# ============================================
-# Nexus Selenium - Dockerfile (Render)
-# Chrome + Selenium + Python
-# ============================================
+# ======================================================
+# Nexus Selenium Agent - Dockerfile (ROOT)
+# Compatível com Render (Free e Starter)
+# Com FastAPI + Selenium + Chrome Headless
+# ======================================================
 
+# Imagem base do Python
 FROM python:3.11-slim
 
-# Instalar dependências do Chrome + Selenium
-RUN apt-get update && apt-get install -y \
-    wget unzip gnupg curl chromium chromium-driver \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+# Evita prompts interativos
+ENV DEBIAN_FRONTEND=noninteractive
 
-# Variáveis obrigatórias para Chrome headless
-ENV CHROME_BIN=/usr/bin/chromium
-ENV CHROMEDRIVER=/usr/bin/chromedriver
+# Instala dependências do Chrome + Selenium
+RUN apt-get update && \
+    apt-get install -y wget gnupg unzip curl && \
+    apt-get install -y chromium chromium-driver && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
+# Diretório principal
 WORKDIR /app
 
-COPY requirements.txt requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
-
+# Copia todo o projeto
 COPY . .
 
-CMD ["python", "agent.py"]
+# Instala dependências Python
+RUN pip install --no-cache-dir -r requirements.txt
+
+# A porta usada pelo FastAPI (Render fornece $PORT automaticamente)
+ENV PORT=10000
+
+# Expõe a porta para o Render detectar
+EXPOSE 10000
+
+# ======================================================================
+# Comando final:
+# - Inicia o Navegador (Chrome Headless) via Selenium
+# - Inicia o servidor FastAPI / Uvicorn
+# ======================================================================
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT}"]
