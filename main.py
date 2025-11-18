@@ -16,7 +16,7 @@ class PingHandler(BaseHTTPRequestHandler):
 def keep_render_alive():
     """
     Mantém uma porta aberta para que a Render NÃO derrube
-    o serviço no plano FREE.
+    o serviço no plano FREE ou STARTER.
     """
     server = HTTPServer(("0.0.0.0", 10000), PingHandler)
     print("[NEXUS-SELENIUM] Porta 10000 aberta (Render OK).")
@@ -33,8 +33,8 @@ def selenium_loop():
     """
     while True:
         try:
-            print("\n[ NEXUS SELENIUM ] Iniciando navegação...")
-            start_selenium_bot()  # sua função real do navegador
+            print("\n[ NEXUS SELENIUM ] Iniciando navegador...")
+            start_selenium_bot()
 
         except Exception as e:
             print("\n[ ERRO SELENIUM ] Ocorreu um erro no navegador:")
@@ -42,7 +42,7 @@ def selenium_loop():
             print("[ REINICIANDO EM 5s ]\n")
             time.sleep(5)
 
-        # Se o script sair sem erro, ainda reiniciamos
+        # Reinicia sempre
         print("[NEXUS] Reiniciando Selenium em 5s...")
         time.sleep(5)
 
@@ -56,8 +56,8 @@ if __name__ == "__main__":
     print("         NEXUS SELENIUM - INICIANDO         ")
     print("============================================")
 
-    # Thread para manter a porta viva
+    # Thread da porta (mantém a Render acordada)
     threading.Thread(target=keep_render_alive, daemon=True).start()
 
-    # Thread para a automação do Selenium
+    # Thread para o Selenium
     threading.Thread(target=selenium_loop, daemon=False).start()
