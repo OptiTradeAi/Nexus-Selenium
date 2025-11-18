@@ -18,7 +18,7 @@ import os
 #  CONFIGURAÇÕES GERAIS
 # ============================================================
 
-HB_URL = "https://www.homebroker.com/pt/invest"
+HB_URL = "https://www.homebroker.com/pt/sign-in"
 
 LOGIN_EMAIL = os.getenv("HB_EMAIL", "")
 LOGIN_PASS = os.getenv("HB_PASS", "")
@@ -41,41 +41,51 @@ def create_browser():
     chrome_opts.add_argument("--headless=new")
     chrome_opts.add_argument("--window-size=1500,900")
 
+    chrome_opts.binary_location = "/usr/bin/chromium"
+
     print("[Browser] Inicializando navegador headless...")
     return webdriver.Chrome(options=chrome_opts)
 
 
 # ============================================================
-#  LOGIN AUTOMÁTICO
+#  LOGIN AUTOMÁTICO ATUALIZADO
 # ============================================================
 
 def perform_login(browser):
 
-    print("[Login] Acessando HomeBroker...")
+    print("[Login] Acessando página de login...")
     browser.get(HB_URL)
-    time.sleep(4)
+    time.sleep(5)
 
     try:
-        print("[Login] Procurando campos de email e senha...")
+        print("[Login] Procurando campos de e-mail e senha...")
 
-        email_field = browser.find_element(By.XPATH, "//input[@type='email']")
-        pass_field = browser.find_element(By.XPATH, "//input[@type='password']")
+        # CAMPOS CORRETOS DO LOGIN
+        email_field = browser.find_element(By.ID, "email")
+        pass_field = browser.find_element(By.ID, "password")
 
         email_field.send_keys(LOGIN_EMAIL)
         time.sleep(1)
         pass_field.send_keys(LOGIN_PASS)
         time.sleep(1)
 
-        pass_field.send_keys(Keys.ENTER)
-        print("[Login] Enviando login...")
+        # Botão de login real
+        login_btn = browser.find_element(By.XPATH, "//button[contains(., 'Entrar')]")
+        login_btn.click()
 
-        time.sleep(5)
+        print("[Login] Enviando credenciais...")
+        time.sleep(7)
 
-        print("[OK] Login efetuado com sucesso!")
-        return True
+        # Verificação simples
+        if "invest" in browser.current_url:
+            print("[OK] Login realizado com sucesso!")
+            return True
+        
+        print("[ERRO] Login não completou. Página atual:", browser.current_url)
+        return False
 
     except Exception as e:
-        print("[ERRO] Falha no login:")
+        print("[ERRO LOGIN] Falha durante o login:")
         print(e)
         return False
 
@@ -90,18 +100,18 @@ def capture_frame(browser):
 
 
 # ============================================================
-#  STREAM PARA O CÉREBRO NEXUS MOBILE
+#  STREAM PARA O NEXUS MOBILE
 # ============================================================
 
 async def stream_loop(browser):
 
     while True:
         try:
-            print("[WSS] Conectando ao Nexus Stream...")
+            print("[WSS] Conectando ao Nexus Stream:", NEXUS_STREAM_URL)
 
             async with websockets.connect(NEXUS_STREAM_URL, max_size=2_000_000) as ws:
 
-                print("[WSS] Conectado ao cérebro Nexus Mobile.")
+                print("[WSS] Conectado. Enviando frames...")
 
                 while True:
                     frame_b64 = capture_frame(browser)
@@ -112,19 +122,19 @@ async def stream_loop(browser):
                     })
 
                     await ws.send(payload)
-                    print("[ENVIO] Frame enviado ao Nexus.")
+                    print("[ENVIO] Frame enviado.")
 
-                    await asyncio.sleep(1.5)  # ajustável
+                    await asyncio.sleep(1.5)
 
         except Exception as e:
-            print("[WSS] Erro no WebSocket:")
+            print("[WSS ERRO] Problema no WebSocket:")
             print(e)
-            print("[WSS] Tentando reconectar em 3s...")
+            print("[RETRY] Reconectando em 3s...")
             await asyncio.sleep(3)
 
 
 # ============================================================
-#  LOOP PRINCIPAL
+#  LOOP PRINCIPAL DO SELENIUM
 # ============================================================
 
 def start_selenium_bot():
@@ -141,7 +151,7 @@ def start_selenium_bot():
                 time.sleep(4)
                 continue
 
-            # STREAM
+            # STREAM LOOP
             asyncio.run(stream_loop(browser))
 
         except Exception as e:
