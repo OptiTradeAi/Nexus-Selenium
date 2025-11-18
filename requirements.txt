@@ -1,6 +1,7 @@
-selenium==4.21.0
-websocket-client
+fastapi
+uvicorn
+selenium
+webdriver-manager
 python-dotenv
-pillow
-opencv-python-headless
-numpy
+requests
+pydantic
