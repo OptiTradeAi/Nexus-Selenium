@@ -1,11 +1,10 @@
 # ==========================
-#   Nexus Selenium Bot
+#   Nexus Selenium Bot - FIXED
 # ==========================
+
 FROM python:3.11-slim
 
 WORKDIR /app
-
-# Copia tudo
 COPY . .
 
 # Dependências do sistema para Chromium/undetected-chromedriver
@@ -30,25 +29,19 @@ RUN apt-get update && apt-get install -y \
     libcups2 \
     libgbm1 \
     libxss1 \
-    libgdk-pixbuf2.0-0 \
     chromium \
     chromium-driver \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Evita problemas com /dev/shm
 RUN mkdir -p /dev/shm && chmod 777 /dev/shm
 
-# Instala dependências Python
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Variáveis para Selenium
 ENV CHROME_BIN=/usr/bin/chromium
 ENV CHROME_DRIVER=/usr/bin/chromedriver
 ENV PYTHONUNBUFFERED=1
 
-# Porta para "keepalive" HTTP (Render exige bind)
 EXPOSE 10000
 
-# Comando padrão
 CMD ["python3", "main.py"]
