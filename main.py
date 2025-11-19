@@ -1,23 +1,27 @@
 from fastapi import FastAPI
-import uvicorn
-import threading
-from selenium_core import start_selenium_bot
+from selenium_core import NexusSelenium
 
 app = FastAPI()
 
 @app.get("/")
 def root():
-    return {"Nexus-Selenium": "ONLINE"}
+    return {"status": "Nexus Selenium Online 🚀"}
 
-@app.get("/status")
-def status():
-    return {"status": "running"}
+@app.get("/login")
+def login(email: str, senha: str):
+    bot = NexusSelenium()
+    bot.acessar_login()
 
-def selenium_thread():
-    start_selenium_bot()
+    ok = bot.fazer_login(email, senha)
 
-# Inicia Selenium em thread paralela
-threading.Thread(target=selenium_thread, daemon=True).start()
+    bot.wait(5)
+    bot.fechar()
 
-if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=10000)
+    if ok:
+        return {"login": True, "detail": "Login enviado com sucesso"}
+    else:
+        return {"login": False, "detail": "Erro ao tentar fazer login"}
+
+@app.get("/grafico")
+def grafico():
+    return {"detail": "Captura de gráfico ainda não ativada"}
