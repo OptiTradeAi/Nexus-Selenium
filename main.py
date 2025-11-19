@@ -1,27 +1,46 @@
-from fastapi import FastAPI
-from selenium_core import NexusSelenium
+import threading
+import time
+from http.server import HTTPServer, BaseHTTPRequestHandler
+from selenium_core import selenium_loop
 
-app = FastAPI()
+# =============================
+# Servidor HTTP p/ manter Render "viva"
+# =============================
+class PingHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"Nexus Selenium Running - OK")
 
-@app.get("/")
-def root():
-    return {"status": "Nexus Selenium Online 🚀"}
+    def do_HEAD(self):
+        self.send_response(200)
+        self.end_headers()
 
-@app.get("/login")
-def login(email: str, senha: str):
-    bot = NexusSelenium()
-    bot.acessar_login()
+def keep_render_alive():
+    """
+    Mantém uma porta aberta para que a Render NÃO derrube
+    o serviço no plano FREE.
+    """
+    server = HTTPServer(("0.0.0.0", 10000), PingHandler)
+    print("[NEXUS-SELENIUM] Porta 10000 aberta (Render OK).")
+    server.serve_forever()
 
-    ok = bot.fazer_login(email, senha)
 
-    bot.wait(5)
-    bot.fechar()
+# =============================
+# Main
+# =============================
+if __name__ == "__main__":
 
-    if ok:
-        return {"login": True, "detail": "Login enviado com sucesso"}
-    else:
-        return {"login": False, "detail": "Erro ao tentar fazer login"}
+    print("============================================")
+    print("         NEXUS SELENIUM - INICIANDO         ")
+    print("============================================")
 
-@app.get("/grafico")
-def grafico():
-    return {"detail": "Captura de gráfico ainda não ativada"}
+    # Thread para manter a porta viva (daemon)
+    t = threading.Thread(target=keep_render_alive, daemon=True)
+    t.start()
+
+    # Roda o loop principal (bloqueante) que faz restart automático
+    try:
+        selenium_loop()
+    except KeyboardInterrupt:
+        print("Encerrando por KeyboardInterrupt.")
