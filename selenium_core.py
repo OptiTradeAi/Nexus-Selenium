@@ -1,114 +1,172 @@
-# ==========================
-#   NEXUS SELENIUM CORE
-#   Versão estável - Render
-# ==========================
-
 import time
+import base64
+import traceback
+from datetime import datetime
+
 from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.keys import Keys
+
+import websockets
+import asyncio
+import json
+import os
 
 
-class NexusSelenium:
-    def __init__(self):
-        self.driver = None
+# ============================================================
+#  CONFIGURAÇÕES
+# ============================================================
 
-    # -------------------------
-    # Inicia o navegador Chrome
-    # -------------------------
-    def iniciar_navegador(self):
-        print("[Browser] Inicializando navegador Chromium headless...")
+LOGIN_URL = "https://www.homebroker.com/pt/sign-in"
+GRAPH_URL = "https://www.homebroker.com/pt/invest"
 
-        options = Options()
-        options.add_argument("--headless=new")
-        options.add_argument("--no-sandbox")
-        options.add_argument("--disable-dev-shm-usage")
-        options.add_argument("--disable-gpu")
-        options.add_argument("--disable-software-rasterizer")
-        options.add_argument("--remote-debugging-port=9222")
-        options.add_argument("--window-size=1920,1080")
-        options.add_argument("--disable-infobars")
-        options.add_argument("--disable-extensions")
-        options.add_argument("--disable-background-networking")
-        options.add_argument("--disable-default-apps")
-        options.add_argument("--disable-sync")
-        options.add_argument("--metrics-recording-only")
-        options.add_argument("--disable-client-side-phishing-detection")
-        options.add_argument("--disable-notifications")
-        options.add_argument("--disable-popup-blocking")
+LOGIN_EMAIL = os.getenv("HB_EMAIL", "")
+LOGIN_PASS = os.getenv("HB_PASS", "")
 
+NEXUS_STREAM_URL = os.getenv("NEXUS_STREAM", "wss://nexus-mobile-ai.onrender.com/ws/stream")
+
+
+# ============================================================
+#  CRIAR BROWSER
+# ============================================================
+
+def create_browser():
+    chrome_opts = Options()
+    chrome_opts.add_argument("--no-sandbox")
+    chrome_opts.add_argument("--disable-dev-shm-usage")
+    chrome_opts.add_argument("--disable-gpu")
+    chrome_opts.add_argument("--disable-extensions")
+    chrome_opts.add_argument("--disable-infobars")
+    chrome_opts.add_argument("--headless=new")
+    chrome_opts.add_argument("--window-size=1500,900")
+
+    print("[Browser] Inicializando navegador Chromium headless...")
+    return webdriver.Chrome(options=chrome_opts)
+
+
+# ============================================================
+#  LOGIN AUTOMÁTICO (AGORA CORRIGIDO COM XPATHS REAIS)
+# ============================================================
+
+def perform_login(browser):
+
+    print("[Login] Acessando página de login...")
+    browser.get(LOGIN_URL)
+    time.sleep(4)
+
+    try:
+        print("[Login] Procurando campos...")
+
+        # valores vindos do arquivo JSON enviado por você
+        email_xpath = "//*[@id=\":rb:-form-item\"]"
+        pass_xpath = "/html/body/div/div/div/div[2]/form/div[1]/div[2]/div/input"
+        login_btn_xpath = "/html/body/div/div/div/div[2]/form/div[2]/button[1]"
+
+        # encontrar campos
+        email_field = browser.find_element(By.XPATH, email_xpath)
+        pass_field = browser.find_element(By.XPATH, pass_xpath)
+
+        # preencher email
+        email_field.clear()
+        email_field.send_keys(LOGIN_EMAIL)
+        time.sleep(1)
+
+        # preencher senha
+        pass_field.clear()
+        pass_field.send_keys(LOGIN_PASS)
+        time.sleep(1)
+
+        # clicar botão "Iniciar sessão"
+        login_btn = browser.find_element(By.XPATH, login_btn_xpath)
+        login_btn.click()
+
+        print("[Login] Enviando credenciais...")
+
+        time.sleep(6)
+
+        # Após login — ir ao gráfico
+        browser.get(GRAPH_URL)
+        print("[Login OK] Usuário autenticado e gráfico carregado!")
+
+        time.sleep(5)
+        return True
+
+    except Exception as e:
+        print("[ERRO LOGIN]:", str(e))
+        return False
+
+
+# ============================================================
+#  CAPTURAR FRAME
+# ============================================================
+
+def capture_frame(browser):
+    png = browser.get_screenshot_as_png()
+    return base64.b64encode(png).decode()
+
+
+# ============================================================
+#  STREAM PARA NEXUS MOBILE AI
+# ============================================================
+
+async def stream_loop(browser):
+
+    while True:
         try:
-            self.driver = webdriver.Chrome(options=options)
-            print("[Browser OK] Chromium iniciado com sucesso!")
+            print("[WSS] Conectando ao Nexus Stream...")
+
+            async with websockets.connect(NEXUS_STREAM_URL, max_size=2_000_000) as ws:
+
+                print("[WSS] Conectado ao Nexus.")
+
+                while True:
+                    frame_b64 = capture_frame(browser)
+
+                    payload = json.dumps({
+                        "timestamp": datetime.now().isoformat(),
+                        "frame": frame_b64
+                    })
+
+                    await ws.send(payload)
+                    print("[ENVIO] Frame enviado.")
+
+                    await asyncio.sleep(1.5)
 
         except Exception as e:
-            print("[ERRO] Falha ao iniciar o Chrome:", e)
-            raise e
+            print("[WSS] Erro:", str(e))
+            await asyncio.sleep(3)
 
-    # -------------------------
-    # Realiza login na corretora
-    # -------------------------
-    def login(self, email, senha):
+
+# ============================================================
+#  LOOP PRINCIPAL
+# ============================================================
+
+def start_selenium_bot():
+
+    while True:
         try:
-            print("[Login] Acessando página de login...")
-            self.driver.get("https://www.homebroker.com/pt/sign-in")
-            time.sleep(3)
 
-            print("[Login] Procurando campos...")
-            campo_email = self.driver.find_element(By.XPATH, "//input[@placeholder='Digite seu e-mail']")
-            campo_senha = self.driver.find_element(By.XPATH, "//input[@placeholder='Digite sua senha']")
+            browser = create_browser()
 
-            campo_email.send_keys(email)
-            campo_senha.send_keys(senha)
+            login_ok = perform_login(browser)
+            if not login_ok:
+                print("[LOGIN FAIL] Reiniciando...")
+                browser.quit()
+                time.sleep(4)
+                continue
 
-            btn = self.driver.find_element(By.XPATH, "//button[contains(., 'Entrar')]")
-            btn.click()
+            asyncio.run(stream_loop(browser))
 
-            print("[Login] Enviando dados...")
-            time.sleep(5)
+        except Exception:
+            print("[FALHA CRÍTICA]")
+            print(traceback.format_exc())
 
-            # Confirma login
-            if "invest" in self.driver.current_url:
-                print("[LOGIN ✔] Login realizado com sucesso!")
-                return True
-            else:
-                print("[LOGIN ✖] Falha no login, tentando novamente...")
-                return False
+        finally:
+            try:
+                browser.quit()
+            except:
+                pass
 
-        except Exception as e:
-            print("[ERRO LOGIN]:", e)
-            return False
-
-    # -------------------------
-    # Abre o gráfico OTC
-    # -------------------------
-    def abrir_grafico(self):
-        try:
-            print("[Navegação] Acessando gráfico OTC...")
-            self.driver.get("https://www.homebroker.com/pt/invest")
-            time.sleep(5)
-            print("[Navegação] Gráfico carregado com sucesso!")
-
-        except Exception as e:
-            print("[ERRO GRAFICO]:", e)
-
-    # -------------------------
-    # Captura candles do gráfico
-    # -------------------------
-    def capturar_candles(self):
-        print("[Captura] Lendo candles do DOM...")
-
-        try:
-            candles = self.driver.find_elements(By.CSS_SELECTOR, ".tv-lightweight-charts .pane .series")
-            print(f"[Captura] Candles encontrados: {len(candles)}")
-
-        except Exception as e:
-            print("[ERRO CAPTURA]:", e)
-
-    # -------------------------
-    # Fecha navegador
-    # -------------------------
-    def fechar(self):
-        if self.driver:
-            self.driver.quit()
-            print("[Sistema] Navegador fechado.")
+            print("[Sistema] Reiniciando em 4s...")
+            time.sleep(4)
