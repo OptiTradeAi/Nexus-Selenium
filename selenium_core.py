@@ -15,10 +15,11 @@ import os
 
 
 # ============================================================
-#  CONFIGURAÇÕES GERAIS
+#  CONFIGURAÇÕES
 # ============================================================
 
-HB_URL = "https://www.homebroker.com/pt/sign-in"
+HB_LOGIN_URL = "https://www.homebroker.com/pt/sign-in"
+HB_GRAPH_URL = "https://www.homebroker.com/pt/invest"
 
 LOGIN_EMAIL = os.getenv("HB_EMAIL", "")
 LOGIN_PASS = os.getenv("HB_PASS", "")
@@ -27,7 +28,7 @@ NEXUS_STREAM_URL = os.getenv("NEXUS_STREAM", "wss://nexus-mobile-ai.onrender.com
 
 
 # ============================================================
-#  CONFIGURAÇÃO DO CHROME HEADLESS
+#  INICIALIZAÇÃO DO BROWSER (CHROMIUM)
 # ============================================================
 
 def create_browser():
@@ -41,57 +42,54 @@ def create_browser():
     chrome_opts.add_argument("--headless=new")
     chrome_opts.add_argument("--window-size=1500,900")
 
-    chrome_opts.binary_location = "/usr/bin/chromium"
-
-    print("[Browser] Inicializando navegador headless...")
+    print("[Browser] Inicializando navegador Chromium headless...")
     return webdriver.Chrome(options=chrome_opts)
 
 
 # ============================================================
-#  LOGIN AUTOMÁTICO ATUALIZADO
+#  LOGIN AUTOMÁTICO — TOTALMENTE CORRIGIDO
 # ============================================================
 
 def perform_login(browser):
 
     print("[Login] Acessando página de login...")
-    browser.get(HB_URL)
+    browser.get(HB_LOGIN_URL)
     time.sleep(5)
 
     try:
-        print("[Login] Procurando campos de e-mail e senha...")
+        print("[Login] Procurando campos...")
 
-        # CAMPOS CORRETOS DO LOGIN
-        email_field = browser.find_element(By.ID, "email")
-        pass_field = browser.find_element(By.ID, "password")
+        email_field = browser.find_element(By.XPATH, "//input[@placeholder='Digite seu e-mail']")
+        pass_field = browser.find_element(By.XPATH, "//input[@placeholder='Digite sua senha']")
+        login_button = browser.find_element(By.XPATH, "//button[contains(., 'Iniciar sessão')]")
 
+        email_field.clear()
         email_field.send_keys(LOGIN_EMAIL)
         time.sleep(1)
+
+        pass_field.clear()
         pass_field.send_keys(LOGIN_PASS)
         time.sleep(1)
 
-        # Botão de login real
-        login_btn = browser.find_element(By.XPATH, "//button[contains(., 'Entrar')]")
-        login_btn.click()
+        login_button.click()
+        print("[Login] Enviando...")
 
-        print("[Login] Enviando credenciais...")
         time.sleep(7)
 
-        # Verificação simples
         if "invest" in browser.current_url:
             print("[OK] Login realizado com sucesso!")
             return True
-        
-        print("[ERRO] Login não completou. Página atual:", browser.current_url)
+
+        print("[ERRO] Login não completou!")
         return False
 
     except Exception as e:
-        print("[ERRO LOGIN] Falha durante o login:")
-        print(e)
+        print("[ERRO LOGIN]:", e)
         return False
 
 
 # ============================================================
-#  CAPTURA DO FRAME (SCREENSHOT)
+# CAPTURA DO FRAME
 # ============================================================
 
 def capture_frame(browser):
@@ -100,18 +98,16 @@ def capture_frame(browser):
 
 
 # ============================================================
-#  STREAM PARA O NEXUS MOBILE
+# STREAM PARA O NEXUS MOBILE AI
 # ============================================================
 
 async def stream_loop(browser):
-
     while True:
         try:
-            print("[WSS] Conectando ao Nexus Stream:", NEXUS_STREAM_URL)
-
+            print("[WSS] Conectando ao Nexus...")
             async with websockets.connect(NEXUS_STREAM_URL, max_size=2_000_000) as ws:
 
-                print("[WSS] Conectado. Enviando frames...")
+                print("[WSS] Conectado ao Nexus Mobile.")
 
                 while True:
                     frame_b64 = capture_frame(browser)
@@ -127,14 +123,13 @@ async def stream_loop(browser):
                     await asyncio.sleep(1.5)
 
         except Exception as e:
-            print("[WSS ERRO] Problema no WebSocket:")
-            print(e)
-            print("[RETRY] Reconectando em 3s...")
+            print("[WSS ERRO]:", e)
+            print("[WSS] Tentando reconectar em 3s...")
             await asyncio.sleep(3)
 
 
 # ============================================================
-#  LOOP PRINCIPAL DO SELENIUM
+# LOOP PRINCIPAL
 # ============================================================
 
 def start_selenium_bot():
@@ -143,19 +138,16 @@ def start_selenium_bot():
         try:
             browser = create_browser()
 
-            # LOGIN
-            ok_login = perform_login(browser)
-            if not ok_login:
-                print("[ERRO] Login falhou. Reiniciando navegador...")
+            if not perform_login(browser):
+                print("[LOGIN FAIL] Reiniciando...")
                 browser.quit()
                 time.sleep(4)
                 continue
 
-            # STREAM LOOP
             asyncio.run(stream_loop(browser))
 
         except Exception as e:
-            print("[FALHA CRÍTICA]")
+            print("[CRITICAL ERROR]")
             print(traceback.format_exc())
 
         finally:
@@ -164,5 +156,5 @@ def start_selenium_bot():
             except:
                 pass
 
-            print("[Sistema] Reiniciando navegador em 4s...")
+            print("[Sistema] Reiniciando em 4s...")
             time.sleep(4)
