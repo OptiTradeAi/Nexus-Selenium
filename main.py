@@ -1,46 +1,114 @@
-import threading
+from fastapi import FastAPI
+from fastapi.responses import JSONResponse, FileResponse
+import undetected_chromedriver as uc
+from selenium.webdriver.common.by import By
 import time
-from http.server import HTTPServer, BaseHTTPRequestHandler
-from selenium_core import selenium_loop
+import json
+import os
 
-# =============================
-# Servidor HTTP p/ manter Render "viva"
-# =============================
-class PingHandler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        self.send_response(200)
-        self.end_headers()
-        self.wfile.write(b"Nexus Selenium Running - OK")
+app = FastAPI()
 
-    def do_HEAD(self):
-        self.send_response(200)
-        self.end_headers()
+SCAN_FILE = "/app/homebroker_xpath_scan.json"
 
-def keep_render_alive():
-    """
-    Mantém uma porta aberta para que a Render NÃO derrube
-    o serviço no plano FREE.
-    """
-    server = HTTPServer(("0.0.0.0", 10000), PingHandler)
-    print("[NEXUS-SELENIUM] Porta 10000 aberta (Render OK).")
-    server.serve_forever()
+def scan_login_fields():
+    options = uc.ChromeOptions()
+    options.add_argument("--headless=new")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+
+    driver = uc.Chrome(options=options)
+    driver.get("https://www.homebroker.com/pt/sign-in")
+    time.sleep(5)
+
+    results = {
+        "inputs": [],
+        "buttons": [],
+        "all_elements": []
+    }
+
+    elements = driver.find_elements(By.XPATH, "//*")
+
+    for el in elements:
+        try:
+            tag = el.tag_name
+            elem = {
+                "tag": tag,
+                "text": el.text,
+                "id": el.get_attribute("id"),
+                "name": el.get_attribute("name"),
+                "type": el.get_attribute("type"),
+                "class": el.get_attribute("class"),
+                "placeholder": el.get_attribute("placeholder"),
+                "xpath": "",
+            }
+
+            # gerar xpath absoluto
+            path = driver.execute_script("""
+                function absoluteXPath(element) {
+                    if (element === document.body)
+                        return '/html/body';
+                    var ix= 0;
+                    var siblings= element.parentNode.childNodes;
+                    for (var i= 0; i<siblings.length; i++) {
+                        var sibling= siblings[i];
+                        if (sibling===element)
+                            return absoluteXPath(element.parentNode)+'/'+element.tagName+'['+(ix+1)+']';
+                        if (sibling.nodeType===1 && sibling.tagName===element.tagName)
+                            ix++;
+                    }
+                }
+                return absoluteXPath(arguments[0]);
+            """, el)
+
+            elem["xpath"] = path
+
+            results["all_elements"].append(elem)
+
+            if tag == "input":
+                results["inputs"].append(elem)
+
+            if tag == "button":
+                results["buttons"].append(elem)
+
+        except:
+            continue
+
+    driver.quit()
+
+    # salvar JSON no servidor para download
+    with open(SCAN_FILE, "w") as f:
+        json.dump(results, f, indent=4, ensure_ascii=False)
+
+    return results
 
 
-# =============================
-# Main
-# =============================
-if __name__ == "__main__":
+@app.get("/")
+def root():
+    return {"status": "XPath Scanner ON 🚀", "usage": "/scan para visualizar | /download para baixar"}
 
-    print("============================================")
-    print("         NEXUS SELENIUM - INICIANDO         ")
-    print("============================================")
 
-    # Thread para manter a porta viva (daemon)
-    t = threading.Thread(target=keep_render_alive, daemon=True)
-    t.start()
-
-    # Roda o loop principal (bloqueante) que faz restart automático
+@app.get("/scan")
+def scan():
+    """Retorna o JSON completo na tela para copiar."""
     try:
-        selenium_loop()
-    except KeyboardInterrupt:
-        print("Encerrando por KeyboardInterrupt.")
+        data = scan_login_fields()
+        return JSONResponse(content=data)
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.get("/download")
+def download():
+    """Gera e faz download automático do JSON."""
+    try:
+        scan_login_fields()
+        if os.path.exists(SCAN_FILE):
+            return FileResponse(
+                SCAN_FILE,
+                media_type="application/json",
+                filename="HomeBroker_XPath_Scan.json"
+            )
+        else:
+            return {"error": "Arquivo não encontrado após o scan."}
+    except Exception as e:
+        return {"error": str(e)}
