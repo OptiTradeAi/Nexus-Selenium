@@ -1,4 +1,8 @@
 selenium
 websockets
-pillow
 undetected-chromedriver
+pillow
+asyncio
+fastapi
+uvicorn
+requests
