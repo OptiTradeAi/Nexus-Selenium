@@ -1,7 +1,6 @@
-selenium
-websockets
-undetected-chromedriver
-pillow
-asyncio
 fastapi
 uvicorn
+selenium==4.38.0
+undetected-chromedriver
+websockets
+requests
