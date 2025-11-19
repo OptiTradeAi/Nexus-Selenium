@@ -5,4 +5,3 @@ pillow
 asyncio
 fastapi
 uvicorn
-requests
