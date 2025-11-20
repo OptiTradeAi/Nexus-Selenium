@@ -1,9 +1,5 @@
-flask
-selenium
-undetected-chromedriver
-requests
-trio
-trio-websocket
-websocket-client
-websockets
-pillow
+selenium==4.38.0
+undetected-chromedriver==3.5.5
+flask==3.1.2
+requests==2.32.3
+pillow==12.0.0
