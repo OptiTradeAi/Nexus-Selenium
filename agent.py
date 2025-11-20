@@ -4,27 +4,24 @@ from nexus_login import NexusLogin
 
 def start_selenium_bot():
     driver = create_driver()
-
     login_agent = NexusLogin(driver)
 
-    email = os.getenv("HB_EMAIL")
-    password = os.getenv("HB_PASS")
     login_url = os.getenv("HB_LOGIN_URL")
-
-    if not email or not password or not login_url:
-        print("Erro: Variáveis de ambiente HB_EMAIL, HB_PASS ou HB_LOGIN_URL não definidas.")
+    if not login_url:
+        print("Erro: Variável de ambiente HB_LOGIN_URL não definida.")
         driver.quit()
         return
 
-    result = login_agent.exploratory_login(email, password, login_url)
-    if not result["login"]:
-        print(f"Erro no login: {result['detail']}")
+    # Tenta carregar cookies primeiro
+    if login_agent.load_cookies(login_url):
+        print("Sessão restaurada com sucesso. Prosseguindo com o agente.")
+        # Aqui você pode continuar com o restante da automação após login
+    else:
+        print("Falha ao restaurar sessão via cookies. Necessário login manual ou outro método.")
         driver.quit()
         return
 
-    print("Login realizado, prosseguir com o restante do agente...")
-
-    # Aqui você pode continuar com o restante da automação após login
+    # driver.quit()  # Descomente quando o agente terminar suas tarefas
 
 if __name__ == "__main__":
     print("[AGENT] Iniciando Nexus Selenium...")
