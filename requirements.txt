@@ -1,5 +1,9 @@
+flask
 selenium
 undetected-chromedriver
+requests
+trio
+trio-websocket
+websocket-client
 websockets
 pillow
-requests
