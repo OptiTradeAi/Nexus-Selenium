@@ -1,26 +1,11 @@
-# Nexus Selenium – HomeBroker Automation
+# Nexus-Selenium — Automação de Login + Coleta da HomeBroker
 
-Sistema automático de login e coleta baseado em Selenium com suporte para Render.
+O **Nexus-Selenium** é o serviço responsável por abrir o navegador, acessar a HomeBroker e manter a sessão ativa para permitir que os outros serviços (OptiTrade AI, Kaon CandleReader etc.) funcionem normalmente.
 
-## Arquivos principais
-- `agent.py` – Loop principal
-- `selenium_core.py` – Login + automação
-- `main.py` – API básica
-- `Dockerfile` – Deploy no Render
-- `requirements.txt` – Dependências
+Este projeto funciona totalmente sozinho **depois que você realiza o login manual apenas quando necessário**.
 
-## Login
+---
 
-Campos mapeados pelo scan:
+## 🚀 COMO FUNCIONA
 
-- E-mail → `input#\\:rb\\:-form-item`
-- Senha → `div#\\:rc\\:-form-item > input`
-- Botão → `form button[type='submit']`
-
-## Deploy no Render
-1. Subir tudo para o GitHub
-2. Criar Web Service
-3. Porta padrão = **8000**
-
-## Testar
-Visite:
+1. Você acessa o link:
