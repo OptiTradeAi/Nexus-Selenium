@@ -1,5 +1,6 @@
 from selenium.webdriver.common.by import By
-from selector_login import LOGIN_SELECTORS
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 import time
 
 class NexusLogin:
@@ -7,32 +8,72 @@ class NexusLogin:
     def __init__(self, driver):
         self.driver = driver
 
-    def try_login(self, email, password):
-        try:
-            self.driver.get("https://www.homebroker.com/pt/invest/login")
-            time.sleep(3)
+    def exploratory_login(self, email, password):
+        self.driver.get("https://www.homebroker.com/pt/invest/login")
+        wait = WebDriverWait(self.driver, 15)
 
-            # Campo email
-            email_field = self.driver.find_element(*LOGIN_SELECTORS["email"])
-            email_field.clear()
-            email_field.send_keys(email)
+        for attempt in range(5):
+            try:
+                # Espera inputs aparecerem
+                wait.until(EC.presence_of_all_elements_located((By.TAG_NAME, "input")))
 
-            # Campo senha
-            password_field = self.driver.find_element(*LOGIN_SELECTORS["password"])
-            password_field.clear()
-            password_field.send_keys(password)
+                # Busca campo senha
+                password_fields = self.driver.find_elements(By.CSS_SELECTOR, "input[type='password']")
+                if not password_fields:
+                    # Tenta clicar em botões que possam abrir login
+                    buttons = self.driver.find_elements(By.TAG_NAME, "button")
+                    clicked = False
+                    for btn in buttons:
+                        if any(k in btn.text.lower() for k in ["login", "entrar", "iniciar", "acessar"]):
+                            btn.click()
+                            time.sleep(2)
+                            clicked = True
+                            break
+                    if not clicked:
+                        print("Não encontrou botão para abrir login, tentando novamente...")
+                    continue
 
-            # Botão
-            btn = self.driver.find_element(*LOGIN_SELECTORS["button_login"])
-            btn.click()
+                password_field = password_fields[0]
 
-            time.sleep(4)
+                # Busca campo email próximo ao campo senha
+                text_fields = self.driver.find_elements(By.CSS_SELECTOR, "input[type='text'], input[type='email']")
+                email_field = None
+                for field in text_fields:
+                    if field.location['y'] < password_field.location['y']:
+                        email_field = field
+                        break
 
-            # detecta se logou
-            if "dashboard" in self.driver.current_url.lower():
+                if email_field is None:
+                    raise Exception("Campo email não encontrado")
+
+                # Preenche campos
+                email_field.clear()
+                email_field.send_keys(email)
+                password_field.clear()
+                password_field.send_keys(password)
+
+                # Busca botão de login
+                buttons = self.driver.find_elements(By.TAG_NAME, "button") + self.driver.find_elements(By.CSS_SELECTOR, "input[type='submit']")
+                login_button = None
+                for btn in buttons:
+                    if any(k in btn.text.lower() for k in ["login", "entrar", "iniciar", "acessar", "continuar"]):
+                        login_button = btn
+                        break
+                if login_button is None and buttons:
+                    login_button = buttons[0]
+
+                if login_button is None:
+                    raise Exception("Botão de login não encontrado")
+
+                login_button.click()
+
+                # Espera confirmação de login (URL com dashboard)
+                wait.until(lambda d: "dashboard" in d.current_url.lower())
+                print("Login efetuado com sucesso!")
                 return {"login": True, "detail": "Login efetuado com sucesso"}
 
-            return {"login": False, "detail": "Credenciais incorretas ou página não avançou"}
+            except Exception as e:
+                print(f"Tentativa {attempt+1} falhou: {e}")
+                time.sleep(3)
 
-        except Exception as e:
-            return {"login": False, "detail": f"Erro no login: {str(e)}"}
+        return {"login": False, "detail": "Falha ao efetuar login após várias tentativas"}
