@@ -9,11 +9,10 @@ class NexusLogin:
         self.driver = driver
         self.wait = WebDriverWait(driver, 30)
 
-        # Seletores capturados detalhados
+        # Usando XPath para email por causa do seletor inválido
         self.selectors = {
-            "email": "#:rb:-form-item",
+            "email": '//*[@id=":rb:-form-item"]',
             "password": "input[name='password']",
-            # O botão de submit não foi capturado no JSON, então vamos usar um seletor genérico para botão no form
             "submit": "form button[type='submit'], form button"
         }
 
@@ -23,7 +22,7 @@ class NexusLogin:
 
         try:
             print("[LOGIN] Aguardando campo de email...")
-            email_elem = self.wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, self.selectors["email"])))
+            email_elem = self.wait.until(EC.presence_of_element_located((By.XPATH, self.selectors["email"])))
             print("[LOGIN] Campo de email encontrado, preenchendo...")
             email_elem.clear()
             email_elem.send_keys(email)
