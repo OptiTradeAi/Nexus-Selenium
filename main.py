@@ -1,49 +1,42 @@
-# main.py
-from fastapi import FastAPI, BackgroundTasks
-from starlette.responses import RedirectResponse, JSONResponse
+from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 import threading
 import os
 import time
-import logging
 
-from selenium_core import discover_selectors_once, start_selenium_loop, SELECTORS_PATH
+from agent import start_agent
 
 app = FastAPI()
-logging.basicConfig(level=logging.INFO)
 
-@app.on_event("startup")
-def startup_event():
-    # opcional: inicia loop contínuo em background (comente se não quiser)
-    if os.getenv("START_SELENIUM_LOOP", "false").lower() == "true":
-        t = threading.Thread(target=start_selenium_loop, daemon=True)
-        t.start()
-        logging.info("Selenium loop background started.")
-
+# ==========================
+#       ENDPOINT ROOT
+# ==========================
 @app.get("/")
 def root():
-    return JSONResponse({"status": "Nexus Selenium Online 🚀"})
+    return {"status": "Nexus Selenium ONLINE", "version": "1.0.0"}
 
-@app.get("/login-helper")
-def login_helper(background_tasks: BackgroundTasks):
-    """
-    Redireciona o usuário para a HomeBroker (abertura no celular).
-    Em background dispara o discover automático para capturar seletores.
-    """
-    url = os.getenv("HB_LOGIN_URL", "https://www.homebroker.com/pt/sign-in")
-    # adiciona tarefa em background (non-blocking)
-    background_tasks.add_task(discover_selectors_once, url)
-    # redireciona o usuário para a página (no celular você fará o login)
-    return RedirectResponse(url)
 
-@app.get("/selectors")
-def get_selectors():
+# ==========================
+#       START SCAN
+# ==========================
+@app.get("/start_scan")
+def start_scan():
+    """
+    Inicia o processo do Selenium em thread separada.
+    """
     try:
-        import json
-        if os.path.exists(SELECTORS_PATH):
-            with open(SELECTORS_PATH, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            return JSONResponse({"selectors": data})
-        else:
-            return JSONResponse({"selectors": None})
+        def run_agent():
+            start_agent()
+
+        # Inicia thread paralela para não travar a API
+        thread = threading.Thread(target=run_agent, daemon=True)
+        thread.start()
+
+        return JSONResponse(
+            {"status": "ok",
+             "detail": "Nexus Selenium iniciado. Abra o navegador e faça login na HomeBroker."},
+            status_code=200
+        )
+
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=500)
+        return JSONResponse({"status": "error", "detail": str(e)}, status_code=500)
