@@ -9,18 +9,18 @@ def create_driver():
     options.add_argument("--start-maximized")
     options.add_argument("--window-size=1920,1080")
 
-    # headless novo do Chrome
+    # Headless novo do Chrome
     options.add_argument("--headless=new")
 
     driver = webdriver.Chrome(options=options)
 
     stealth(driver,
-        languages=["pt-BR", "pt"],
-        vendor="Google Inc.",
-        platform="Win32",
-        webgl_vendor="Intel Inc.",
-        renderer="Intel Iris OpenGL Engine",
-        fix_hairline=True,
-    )
+            languages=["pt-BR", "pt"],
+            vendor="Google Inc.",
+            platform="Win32",
+            webgl_vendor="Intel Inc.",
+            renderer="Intel Iris OpenGL Engine",
+            fix_hairline=True,
+            )
 
     return driver
