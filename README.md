@@ -1,23 +1,26 @@
-# Nexus Selenium
-Robô navegador do projeto Nexus Mobile AI.
+# Nexus Selenium – HomeBroker Automation
 
-## Funções
-- Login automático no HomeBroker
-- Troca entre 7 pares OTC
-- Captura do gráfico
-- Envio via WebSocket para Nexus Mobile AI
-- Reconexão automática infinita
+Sistema automático de login e coleta baseado em Selenium com suporte para Render.
 
-## Instalação (LOCAL)
-pip install -r requirements.txt
-python agent.py
+## Arquivos principais
+- `agent.py` – Loop principal
+- `selenium_core.py` – Login + automação
+- `main.py` – API básica
+- `Dockerfile` – Deploy no Render
+- `requirements.txt` – Dependências
 
-## Deploy na Render
-- Crie novo serviço
-- Runtime: Docker
-- Porta: não precisa
-- Deploy: auto
-- Incluir arquivo `.env` com:
-  HB_EMAIL=
-  HB_PASSWORD=
-  NEXUS_WS=
+## Login
+
+Campos mapeados pelo scan:
+
+- E-mail → `input#\\:rb\\:-form-item`
+- Senha → `div#\\:rc\\:-form-item > input`
+- Botão → `form button[type='submit']`
+
+## Deploy no Render
+1. Subir tudo para o GitHub
+2. Criar Web Service
+3. Porta padrão = **8000**
+
+## Testar
+Visite:
