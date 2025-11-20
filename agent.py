@@ -5,12 +5,6 @@ from nexus_login import NexusLogin
 def start_selenium_bot():
     driver = create_driver()
 
-    # Ajusta headless conforme variável de ambiente
-    headless_env = os.getenv("HEADLESS", "true").lower()
-    if headless_env == "false":
-        # Se quiser desabilitar headless, precisaria recriar driver com opções diferentes
-        print("[AGENT] HEADLESS está desabilitado, mas para alterar isso precisa reiniciar driver com opções diferentes.")
-
     login_agent = NexusLogin(driver)
 
     email = os.getenv("HB_EMAIL")
