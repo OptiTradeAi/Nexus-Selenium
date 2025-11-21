@@ -1,42 +1,35 @@
-from fastapi import FastAPI
-from fastapi.responses import JSONResponse
-import threading
+from fastapi import FastAPI, BackgroundTasks
+from fastapi.responses import JSONResponse, RedirectResponse
 import os
-import time
+from dotenv import load_dotenv
+import agent
 
-from agent import start_agent
+load_dotenv()
 
-app = FastAPI()
+app = FastAPI(title="Nexus-Selenium API")
 
-# ==========================
-#       ENDPOINT ROOT
-# ==========================
 @app.get("/")
 def root():
-    return {"status": "Nexus Selenium ONLINE", "version": "1.0.0"}
+    return {"status": "ok", "detail": "Nexus Selenium service. Use /start_scan or /status"}
 
-
-# ==========================
-#       START SCAN
-# ==========================
 @app.get("/start_scan")
-def start_scan():
+def start_scan(background: bool = True):
     """
-    Inicia o processo do Selenium em thread separada.
+    Trigger a selenium discovery/login attempt.
+    If AUTO_LOGIN true and credentials exist, will try to login.
     """
-    try:
-        def run_agent():
-            start_agent()
+    res = agent.start_agent(background=background)
+    return JSONResponse(content=res)
 
-        # Inicia thread paralela para não travar a API
-        thread = threading.Thread(target=run_agent, daemon=True)
-        thread.start()
+@app.get("/status")
+def status():
+    return JSONResponse(content=agent.get_status())
 
-        return JSONResponse(
-            {"status": "ok",
-             "detail": "Nexus Selenium iniciado. Abra o navegador e faça login na HomeBroker."},
-            status_code=200
-        )
-
-    except Exception as e:
-        return JSONResponse({"status": "error", "detail": str(e)}, status_code=500)
+@app.get("/start_scan_and_redirect")
+def start_and_redirect():
+    """
+    For convenience: opens the HomeBroker sign-in in the browser (useful for manual assisted flow).
+    This endpoint simply returns a redirect to the start URL (client/browser should follow).
+    """
+    start_url = os.getenv("START_URL", "https://www.homebroker.com/pt/sign-in")
+    return RedirectResponse(url=start_url)
