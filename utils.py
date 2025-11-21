@@ -1,6 +1,9 @@
-import os
+import time
+import base64
+from selenium.webdriver.remote.webdriver import WebDriver
 
-def save_screenshot(driver, filename):
-    path = os.path.join("/app", filename)
+def take_screenshot(driver: WebDriver, path: str):
     driver.save_screenshot(path)
-    print(f"[Screenshot] Salvo em {path}")
+
+def sleep(t=0.2):
+    time.sleep(t)
