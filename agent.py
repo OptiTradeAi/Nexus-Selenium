@@ -13,7 +13,6 @@ def start_agent():
 
     while True:
         try:
-            # Cria nova sessão ao iniciar ou quando expirar
             if session is None or (time.time() - session_start_time) > SESSION_TTL:
                 print("[NEXUS] Criando nova sessão...")
                 session = HomeBrokerSession()
@@ -23,7 +22,6 @@ def start_agent():
                     print("[NEXUS] Realizando login automático...")
                     session.perform_login()
 
-            # Loop principal do agente
             session.cycle()
 
         except Exception as e:
