@@ -12,30 +12,23 @@ class HomeBrokerSession:
         options.add_argument("--no-sandbox")
         options.add_argument("--disable-dev-shm-usage")
         options.add_argument("--disable-gpu")
-        options.add_argument("--disable-popup-blocking")
-        options.add_argument("--disable-notifications")
         options.add_argument("--window-size=1280,720")
         options.add_argument("--headless=new")
 
         self.driver = uc.Chrome(options=options)
         self.driver.get("https://www.homebroker.com/pt/invest")
 
-    # ---- Método de busca robusta ----
     def find_element_robust(self, selectors, timeout=10):
         for _ in range(timeout):
             for selector_type, selector_value in selectors:
                 try:
-                    el = self.driver.find_element(selector_type, selector_value)
-                    return el
+                    return self.driver.find_element(selector_type, selector_value)
                 except:
                     pass
             time.sleep(1)
         raise NoSuchElementException("Elemento não encontrado com nenhum seletor.")
 
-    # ---- Login ----
     def perform_login(self):
-        print("[NEXUS] Tentando localizar campo de e-mail...")
-
         email_selectors = [
             (By.CSS_SELECTOR, "input[placeholder='Digite seu e-mail']"),
             (By.CSS_SELECTOR, "input[type='email']"),
@@ -59,14 +52,10 @@ class HomeBrokerSession:
 
         email.send_keys(os.getenv("HB_EMAIL"))
         senha.send_keys(os.getenv("HB_PASSWORD"))
-
-        time.sleep(1)
         button.click()
 
-        print("[NEXUS] Login enviado. Aguardando dashboard...")
         time.sleep(5)
 
-    # ---- Ciclo contínuo ----
     def cycle(self):
-        print("[NEXUS] Ciclo ativo - coletando dados da corretora...")
+        print("[NEXUS] Ciclo ativo...")
         time.sleep(5)
