@@ -9,7 +9,7 @@ app = FastAPI()
 def root():
     return {
         "status": "ok",
-        "detail": "Nexus Selenium rodando. Abra a HomeBroker e aguarde o agente assumir."
+        "detail": "Nexus Selenium rodando."
     }
 
 @app.get("/start_agent")
@@ -17,4 +17,4 @@ def start_background():
     t = threading.Thread(target=start_agent)
     t.daemon = True
     t.start()
-    return {"status": "ok", "detail": "Agente iniciado em background."}
+    return {"status": "ok", "detail": "Agente iniciado."}
