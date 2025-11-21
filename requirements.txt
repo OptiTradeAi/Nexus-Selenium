@@ -1,8 +1,6 @@
 fastapi==0.121.2
-uvicorn[standard]==0.21.1
-undetected-chromedriver==3.5.5
-selenium==4.38.0
-websockets==10.4
-pillow==9.5.0
+uvicorn==0.21.1
 python-dotenv==1.1.1
+selenium==4.38.0
+undetected-chromedriver==3.5.5
 requests==2.32.5
