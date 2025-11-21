@@ -1,20 +1,22 @@
-# Dockerfile (Nexus Selenium - Render)
+# Use Python slim
 FROM python:3.11-slim
 
-WORKDIR /app
-ENV PYTHONUNBUFFERED=1
+ENV DEBIAN_FRONTEND=noninteractive
 
-# dependências do sistema necessárias para Chromium / undetected-chromedriver
+WORKDIR /app
+
+COPY . /app
+
+# Install system deps for Chromium and headless operation
 RUN apt-get update && apt-get install -y \
     wget \
     curl \
-    unzip \
-    gnupg \
     ca-certificates \
+    gnupg \
+    unzip \
     fonts-liberation \
-    libglib2.0-0 \
     libnss3 \
-    libx11-6 \
+    libx11-xcb1 \
     libxcomposite1 \
     libxcursor1 \
     libxdamage1 \
@@ -25,23 +27,20 @@ RUN apt-get update && apt-get install -y \
     libcups2 \
     libgbm1 \
     libxss1 \
-    libgdk-pixbuf-xlib-2.0-0 \
+    libxrender1 \
     chromium \
-    && rm -rf /var/lib/apt/lists/*
+    chromium-driver \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# cria /app e copia
-COPY . .
+ENV CHROME_BIN=/usr/bin/chromium
+ENV CHROME_DRIVER=/usr/bin/chromedriver
+ENV PYTHONUNBUFFERED=1
 
-# instala dependências python
-RUN pip install --no-cache-dir --upgrade pip
 RUN pip install --no-cache-dir -r requirements.txt
 
-# diretório para salvar screenshots e seletores
-RUN mkdir -p /app/data
-RUN chmod -R 777 /app
+# create data dir
+RUN mkdir -p /app/data && chmod -R 777 /app
 
-# Porta a ser exposta (Render detecta automaticamente, ajuste se necessário)
 EXPOSE 10000
 
-# Comando de inicialização: uvicorn
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "10000", "--log-level", "info"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "10000"]
