@@ -1,28 +1,29 @@
 # main.py
+from fastapi import FastAPI, HTTPException
 import os
-from fastapi import FastAPI, Header, HTTPException
-from fastapi.responses import JSONResponse
 from selenium_core import start_selenium_loop
 
 app = FastAPI()
 
-NEXUS_TOKEN = "032318"   # Token fixo definido pelo Diego
+NEXUS_TOKEN = "032318"
+
 
 @app.get("/")
 async def root():
     return {
         "status": "online",
         "service": "Nexus-Selenium",
-        "token_loaded": True,
-        "email_loaded": os.getenv("HB_EMAIL") is not None
+        "token_loaded": True
     }
+
 
 @app.get("/connect")
 async def connect(token: str = ""):
     if token != NEXUS_TOKEN:
         raise HTTPException(status_code=401, detail="Invalid token")
 
-    return {"status": "waiting", "message": "Now open /start to trigger selenium"}
+    return {"status": "waiting", "step": "use /start to launch selenium"}
+
 
 @app.get("/start")
 async def start(token: str = ""):
@@ -30,4 +31,5 @@ async def start(token: str = ""):
         raise HTTPException(status_code=401, detail="Invalid token")
 
     start_selenium_loop()
-    return {"status": "ok", "message": "Selenium loop started"}
+
+    return {"status": "ok", "message": "selenium started"}
