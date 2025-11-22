@@ -1,9 +1,10 @@
-# Nexus Selenium Bot — Dockerfile
+# Base image
 FROM python:3.11-slim
 
+# Workdir
 WORKDIR /app
 
-# system deps for Chromium headless
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
     wget \
     curl \
@@ -29,19 +30,21 @@ RUN apt-get update && apt-get install -y \
     chromium-driver \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# copy project
-COPY . .
+# Copy requirements
+COPY requirements.txt /app
 
-RUN pip install --no-cache-dir -r requirements.txt
+# Install dependencies
+RUN pip install --upgrade pip setuptools wheel \
+    && pip install -r requirements.txt
 
-ENV CHROME_BIN=/usr/bin/chromium
-ENV CHROME_DRIVER=/usr/bin/chromedriver
-ENV PYTHONUNBUFFERED=1
+# Copy application
+COPY . /app
 
-# create data dir
+# Create data folder
 RUN mkdir -p /app/data && chmod -R 777 /app/data
 
+# Expose internal port
 EXPOSE 10000
 
-# Run agent (this starts FastAPI + agent loop)
-CMD ["python3", "agent.py"]
+# CMD to start FastAPI
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "10000"]
