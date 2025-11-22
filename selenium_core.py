@@ -1,5 +1,4 @@
 # selenium_core.py
-import os
 import time
 import threading
 import undetected_chromedriver as uc
@@ -9,7 +8,7 @@ CHECK_INTERVAL = 10
 
 
 def run_selenium():
-    print("[selenium_core] starting chromium...")
+    print("[selenium_core] Starting Chromium...")
 
     options = uc.ChromeOptions()
     options.add_argument("--headless=new")
@@ -19,37 +18,32 @@ def run_selenium():
 
     driver = uc.Chrome(options=options)
 
-    print("[selenium_core] loading HomeBroker login page...")
+    print("[selenium_core] Opening HomeBroker login page...")
     driver.get(HB_URL)
 
-    print("[selenium_core] waiting for user login...")
-    print(">>> Diego: ACESSE ESSE LINK NO NAVEGADOR PARA LOGIN MANUAL <<<")
+    print("[selenium_core] Waiting for user login...")
+    print(">>> Abra a corretora manualmente no seu navegador <<<")
     print(">>> https://www.homebroker.com/pt/sign-in <<<")
 
-    # Ele apenas observa sem travar
+    # Espera até o usuário logar
     while True:
         try:
-            current = driver.current_url
-            if "invest" in current or "home" in current:
-                print("[selenium_core] Login detected. Monitoring DOM...")
+            if "invest" in driver.current_url or "home" in driver.current_url:
+                print("[selenium_core] Login detected! Starting DOM monitor.")
                 break
-
-        except Exception:
+        except:
             pass
-
         time.sleep(2)
 
-    # Agora começa monitoramento
+    # Monitor de DOM
     while True:
         try:
             dom = driver.page_source
-
             with open("/app/data/dom.html", "w", encoding="utf-8") as f:
                 f.write(dom)
-
-            print("[selenium_core] DOM saved. Waiting...")
+            print("[selenium_core] DOM updated.")
         except Exception as e:
-            print("[selenium_core] ERROR:", e)
+            print("[selenium_core] Error:", e)
 
         time.sleep(CHECK_INTERVAL)
 
@@ -57,3 +51,4 @@ def run_selenium():
 def start_selenium_loop():
     thread = threading.Thread(target=run_selenium, daemon=True)
     thread.start()
+    print("[selenium_core] Selenium thread started.")
