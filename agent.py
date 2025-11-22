@@ -1,24 +1,43 @@
-# agent.py
-import threading, time, os
-from subprocess import Popen
-import dotenv
-dotenv.load_dotenv()
+import os
+import time
+import requests
+from selenium_core import start_selenium_session, perform_dom_learning
 
-# Start the FastAPI server (main.py) as a background process using uvicorn programmatically
-def start_api():
-    # use uvicorn to run main:app
-    import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=10000, log_level="info")
+# =====================================================================
+#  TOKEN — agora ele vem automaticamente do .env (já contém Dcrt17*)
+# =====================================================================
+NEXUS_TOKEN = os.getenv("NEXUS_TOKEN")  # valor: Dcrt17*
+API_CAPTURE_URL = os.getenv("NEXUS_CAPTURE_URL")
 
-def start_selenium_loop_thread():
-    from selenium_core import start_selenium_loop
-    start_selenium_loop()
 
-if __name__ == "__main__":
-    # start API in a thread
-    t_api = threading.Thread(target=start_api, daemon=True)
-    t_api.start()
-    # small delay to ensure API up
-    time.sleep(2)
-    # start selenium loop in main thread — keeps process alive
-    start_selenium_loop_thread()
+def start_agent():
+    print("[NEXUS AGENT] Iniciando sessão Selenium...")
+    driver = start_selenium_session()
+
+    if not driver:
+        print("[ERRO] Falha ao iniciar sessão do Selenium.")
+        return
+
+    print("[NEXUS AGENT] Aguardando usuário fazer login manual.")
+    print("[NEXUS AGENT] Após login, o Nexus irá aprender automaticamente o DOM.")
+
+    learning_ok = perform_dom_learning(driver)
+
+    if learning_ok:
+        print("[NEXUS AGENT] DOM aprendido com sucesso. Enviando ao servidor...")
+
+        data = {"status": "ok", "detail": "DOM capturado com sucesso"}
+
+        try:
+            requests.post(
+                API_CAPTURE_URL,
+                json=data,
+                headers={"Authorization": f"Bearer {NEXUS_TOKEN}"}
+            )
+        except Exception:
+            pass
+
+    else:
+        print("[NEXUS AGENT] Falha ao aprender DOM.")
+
+    print("[NEXUS AGENT] Finalizado.")
