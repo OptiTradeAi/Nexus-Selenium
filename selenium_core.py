@@ -1,125 +1,75 @@
-# selenium_core.py
-import os, time, json
-from utils import load_latest, DATA_DIR
+import os
+import time
+import json
 import undetected_chromedriver as uc
 from selenium.webdriver.common.by import By
-from selenium.common.exceptions import NoSuchElementException, WebDriverException
 
-HB_URL = "https://www.homebroker.com/pt/sign-in"
+HB_LOGIN_URL = "https://www.homebroker.com/pt/sign-in"
 
-def start_selenium_loop():
-    """
-    Long-running loop that:
-    - reads data/latest.json (selectors + heuristics)
-    - if heuristics found email/password/submit, tries to login using HB_EMAIL/HB_PASSWORD
-    - otherwise sleeps and waits for new capture
-    """
-    import dotenv
-    dotenv.load_dotenv()
-    HB_EMAIL = os.getenv("HB_EMAIL")
-    HB_PASSWORD = os.getenv("HB_PASSWORD")
-    if not HB_EMAIL or not HB_PASSWORD:
-        print("[selenium_core] HB_EMAIL or HB_PASSWORD not set. Waiting for credentials.")
-    attempt = 0
-    while True:
-        attempt += 1
-        data = load_latest()
-        if not data:
-            print("[selenium_core] no capture yet. Sleeping 10s.")
-            time.sleep(10)
-            continue
-        heur = data.get("heuristics", {})
-        email_info = heur.get("email")
-        pass_info = heur.get("password")
-        submit_info = heur.get("submit")
-        if not email_info or not pass_info:
-            print("[selenium_core] heuristics incomplete. Sleeping 10s.")
-            time.sleep(10)
-            continue
 
-        # Try login with undetected-chromedriver
-        print("[selenium_core] attempting login using captured selectors (attempt {})".format(attempt))
-        try:
-            options = uc.ChromeOptions()
-            options.headless = True
-            options.add_argument("--no-sandbox")
-            options.add_argument("--disable-dev-shm-usage")
-            driver = uc.Chrome(options=options)
-            driver.set_page_load_timeout(30)
-            driver.get(HB_URL)
-            time.sleep(2)
+def start_selenium_session():
+    """Inicia o navegador invisível no Render."""
+    try:
+        print("[NEXUS] Inicializando Chrome (undetected)…")
 
-            # find email input using multiple strategies
-            email_el = try_find_element(driver, email_info)
-            pass_el = try_find_element(driver, pass_info)
-            submit_el = try_find_element(driver, submit_info)
+        chrome_options = uc.ChromeOptions()
+        chrome_options.add_argument("--headless=new")
+        chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--disable-dev-shm-usage")
+        chrome_options.add_argument("--disable-gpu")
 
-            if email_el and pass_el:
-                email_el.clear()
-                email_el.send_keys(HB_EMAIL)
-                pass_el.clear()
-                pass_el.send_keys(HB_PASSWORD)
-                if submit_el:
-                    try:
-                        submit_el.click()
-                    except Exception:
-                        driver.execute_script("arguments[0].click();", submit_el)
-                print("[selenium_core] login attempted.")
-                time.sleep(5)
-            else:
-                print("[selenium_core] could not locate email/password elements; will wait for a new capture.")
-            driver.quit()
-            # after attempt wait longer
-            time.sleep(30)
-        except WebDriverException as e:
-            print("[selenium_core] webdriver error:", e)
-            try:
-                driver.quit()
-            except:
-                pass
-            time.sleep(10)
+        driver = uc.Chrome(options=chrome_options)
 
-def try_find_element(driver, info):
-    """
-    info is object returned by injector: fields (id, name, placeholder, xpath, tag, type)
-    Try in order: xpath, id, name+type, placeholder.
-    Returns WebElement or None
-    """
-    if not info:
+        print("[NEXUS] Chrome iniciado com sucesso.")
+        driver.get(HB_LOGIN_URL)
+
+        print("[NEXUS] Página de login carregada. Aguardando usuário…")
+
+        return driver
+
+    except Exception as e:
+        print("[ERRO] Falha ao iniciar Chrome:", e)
         return None
-    # try xpath
-    xpath = info.get("xpath")
-    if xpath:
+
+
+def perform_dom_learning(driver):
+    """
+    Observa mudanças no DOM enquanto o usuário faz login e navega.
+    Tenta identificar o container que contém os OHLC/candles.
+    """
+
+    print("[NEXUS] Iniciando aprendizado automático de DOM…")
+
+    baseline = None
+    dom_found = False
+
+    for attempt in range(60):  # até ~60s de observação
         try:
-            return driver.find_element(By.XPATH, xpath)
-        except Exception:
-            pass
-    # try by id
-    idv = info.get("id")
-    if idv:
-        try:
-            return driver.find_element(By.ID, idv)
-        except Exception:
-            pass
-    # try name + type
-    name = info.get("name")
-    tp = info.get("type")
-    if name and tp:
-        try:
-            return driver.find_element(By.CSS_SELECTOR, f"input[name='{name}'][type='{tp}']")
-        except Exception:
-            pass
-    # try placeholder
-    placeholder = info.get("placeholder")
-    if placeholder:
-        try:
-            return driver.find_element(By.XPATH, f"//input[@placeholder='{placeholder}']") 
-        except Exception:
-            pass
-    # fallback: any input with matching type
-    if tp:
-        try:
-            return driver.find_element(By.XPATH, f"//input[@type='{tp}']")
-        except Exception:
-            pass
-    return None
+            html = driver.page_source
+
+            if baseline is None:
+                baseline = html
+
+            # Se houve mudança, tentar identificar a seção de dados
+            if html != baseline:
+                print(f"[NEXUS] Mudança detectada no DOM (variação #{attempt})")
+
+                # Buscando elementos prováveis da área de candles
+                suspects = driver.find_elements(By.XPATH, "//*[contains(text(),'Open') or contains(text(),'High') or contains(text(),'Low')]")
+
+                if len(suspects) > 0:
+                    print("[NEXUS] Possível área de OHLC encontrada.")
+                    dom_found = True
+                    break
+
+            time.sleep(1)
+
+        except Exception as e:
+            print("[NEXUS] Erro durante varredura:", e)
+            time.sleep(1)
+
+    if not dom_found:
+        print("[NEXUS] DOM não encontrado, mas será enviado mesmo assim.")
+        return True  # não queremos abortar
+
+    return True
