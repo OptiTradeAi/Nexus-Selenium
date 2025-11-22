@@ -1,33 +1,33 @@
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse
+# main.py
 import os
-from selenium_core import NexusSelenium
+from fastapi import FastAPI, Header, HTTPException
+from fastapi.responses import JSONResponse
+from selenium_core import start_selenium_loop
 
 app = FastAPI()
 
-TOKEN = os.getenv("NEXUS_TOKEN")
+NEXUS_TOKEN = "032318"   # Token fixo definido pelo Diego
 
 @app.get("/")
-def root():
-    return {"status": "online", "service": "Nexus-Selenium"}
+async def root():
+    return {
+        "status": "online",
+        "service": "Nexus-Selenium",
+        "token_loaded": True,
+        "email_loaded": os.getenv("HB_EMAIL") is not None
+    }
 
-@app.get("/start_scan")
-def start_scan(token: str):
-    if token != TOKEN:
-        raise HTTPException(status_code=403, detail="Invalid token")
+@app.get("/connect")
+async def connect(token: str = ""):
+    if token != NEXUS_TOKEN:
+        raise HTTPException(status_code=401, detail="Invalid token")
 
-    try:
-        nexus = NexusSelenium()
-        nexus.start()
+    return {"status": "waiting", "message": "Now open /start to trigger selenium"}
 
-        return HTMLResponse("""
-        <html>
-        <body style='font-family: Arial; background:#111; color:#0f0; padding:20px'>
-        <h2>Nexus Selenium – Modo SCAN Ativado</h2>
-        <p>O agente está abrindo a corretora e iniciando a análise.</p>
-        <p>Mantenha esta aba aberta por enquanto.</p>
-        </body>
-        </html>
-        """)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+@app.get("/start")
+async def start(token: str = ""):
+    if token != NEXUS_TOKEN:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    start_selenium_loop()
+    return {"status": "ok", "message": "Selenium loop started"}
