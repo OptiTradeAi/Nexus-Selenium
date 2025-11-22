@@ -2,13 +2,13 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+# Dependências do Chrome
 RUN apt-get update && apt-get install -y \
     wget \
     curl \
     unzip \
     gnupg \
     ca-certificates \
-    fonts-liberation \
     libglib2.0-0 \
     libnss3 \
     libx11-6 \
@@ -27,13 +27,11 @@ RUN apt-get update && apt-get install -y \
     chromium-driver \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
+COPY requirements.txt /app/
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . /app
 
 RUN mkdir -p /app/data && chmod -R 777 /app/data
 
-EXPOSE 10000
-
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "10000"]
+CMD ["python", "main.py"]
