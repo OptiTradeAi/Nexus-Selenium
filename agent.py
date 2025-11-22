@@ -1,29 +1,24 @@
-import time
-import os
-from selenium_core import HomeBrokerSession
+# agent.py
+import threading, time, os
+from subprocess import Popen
+import dotenv
+dotenv.load_dotenv()
 
-def start_agent():
-    print("[NEXUS] Iniciando agente Nexus Selenium...")
+# Start the FastAPI server (main.py) as a background process using uvicorn programmatically
+def start_api():
+    # use uvicorn to run main:app
+    import uvicorn
+    uvicorn.run("main:app", host="0.0.0.0", port=10000, log_level="info")
 
-    SESSION_TTL = int(os.getenv("SESSION_TTL_HOURS", "24")) * 3600
-    AUTO_LOGIN = os.getenv("AUTO_LOGIN", "true").lower() == "true"
+def start_selenium_loop_thread():
+    from selenium_core import start_selenium_loop
+    start_selenium_loop()
 
-    session = None
-    session_start_time = 0
-
-    while True:
-        try:
-            if session is None or (time.time() - session_start_time) > SESSION_TTL:
-                print("[NEXUS] Criando nova sessão...")
-                session = HomeBrokerSession()
-                session_start_time = time.time()
-
-                if AUTO_LOGIN:
-                    print("[NEXUS] Realizando login automático...")
-                    session.perform_login()
-
-            session.cycle()
-
-        except Exception as e:
-            print(f"[CYCLE ERRO] {e}")
-            time.sleep(3)
+if __name__ == "__main__":
+    # start API in a thread
+    t_api = threading.Thread(target=start_api, daemon=True)
+    t_api.start()
+    # small delay to ensure API up
+    time.sleep(2)
+    # start selenium loop in main thread — keeps process alive
+    start_selenium_loop_thread()
