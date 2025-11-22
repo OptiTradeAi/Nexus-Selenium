@@ -1,39 +1,36 @@
-# Nexus-Selenium (OptiTradeAi) — Robust Headless Login & Discovery
+# Nexus-Selenium — Quick Start
 
-## Objetivo
-Rodar um agente Selenium (undetected-chromedriver) em Render para acessar a página da HomeBroker, executar varredura robusta dos elementos de login (email/senha/submit) e tentar login automático quando credenciais forem fornecidas.
+## O que este repositório contém
+- Serviço que roda no Render (ou Docker) com Selenium (undetected-chromedriver).
+- Endpoint `/injector.js` e instruções para criar um *bookmarklet* que, ao executar na página da HomeBroker, envia captura de DOM/seletores para o Nexus.
+- Agent que usa os dados capturados para realizar login automático.
 
 ## Arquivos principais
-- `main.py` - FastAPI endpoints (/start_scan, /status, /start_scan_and_redirect)
-- `agent.py` - wrapper para iniciar uma execução do Selenium em background
-- `selenium_core.py` - implementação robusta de descoberta e login (CSS -> XPath -> JS)
-- `utils.py` - utilitários (screenshot)
-- `Dockerfile` - container pronto para Render
-- `requirements.txt` - dependências
-- `.env.example` - variáveis ambiente
+- `agent.py` — processo principal que inicio o servidor e o loop Selenium.
+- `main.py` — endpoints FastAPI: status, capture.
+- `selenium_core.py` — rotinas Selenium (login automático usando seletores salvos).
+- `utils.py` — helpers para salvar dados.
+- `injector.js` — script que deve ser executado da HomeBroker para enviar dados para o Nexus.
+- `bookmarklet.txt` — instruções para criar o bookmarklet.
 
-## Variáveis de Environment (colocar no painel Render -> Environment)
-- `HB_EMAIL` (opcional) — email da HomeBroker para login automático
-- `HB_PASSWORD` (opcional) — senha
-- `START_URL` — https://www.homebroker.com/pt/sign-in
-- `AUTO_LOGIN` — true|false (se true, tenta login automático com HB_EMAIL/HB_PASSWORD)
-- `PORT` — 10000
-- `SESSION_TTL_HOURS` — TTL para sessão (não implementado full, porém reservado)
+## Variáveis de ambiente (Render / Environment)
+Adicione estas variáveis no painel do Render (Environment > Environment Variables):
 
-## Como usar
-1. No repositório, adicione os arquivos acima.
-2. No Render: configure um Web Service (Docker) apontando para o repositório.
-3. Configure as **Environment Variables** conforme `.env.example`.
-4. Deploy.
-5. Acesse:
-   - `GET /start_scan` — inicia a varredura/login (resultado disponível em `/status`)
-   - `GET /status` — ver status e resultado
-   - `GET /start_scan_and_redirect` — redireciona para a página da corretora (para login manual assistido)
+- `NEXUS_TOKEN` = token secreto que protege o endpoint `/capture`
+- `NEXUS_CAPTURE_URL` = https://nexus-selenium.onrender.com/capture (ou a URL do seu serviço)
+- `HB_EMAIL` = (opcional) email da conta HomeBroker para auto-login
+- `HB_PASSWORD` = (opcional) senha da conta HomeBroker
+- `HB_KEEP_DAYS` = tempo (dias) de retenção da sessão/credenciais (ex: 7)
 
-## Assistido vs Automático
-- Se preferir dar login manualmente no navegador e o agente pegar a sessão, use `/start_scan_and_redirect` (abre a página). Depois execute `/start_scan` para que o agente tente descobrir elementos e realizar ações (a lógica básica já salva um screenshot em `/app/data/login_snapshot.png`).
-- Para melhor autonomia 24/7, configure `HB_EMAIL` e `HB_PASSWORD` e `AUTO_LOGIN=true`. O agent tentará fazer o login sozinho.
+## Passo-a-passo rápido (deploy + captura)
+1. Substitua/adicione os arquivos neste repositório.
+2. Configure as Environment Variables no Render conforme acima.
+3. Deploy no Render (ou `docker build` locally).
+4. Após o serviço ficar online abra `https://<sua-url>/injector.js` — ou pegue o código do `bookmarklet.txt`.
+5. Crie o bookmarklet no seu navegador (ou no celular — instruções no bookmarklet.txt).
+6. Acesse `https://www.homebroker.com/pt/sign-in`, clique no bookmarklet, faça login. O Nexus receberá a estrutura do DOM e salvará seletores.
+7. O agent tentará usar esses seletores para logar automaticamente.
 
-## Debug
-- Logs e screenshots são gravados em `/app/data/`.
-- Se `status` retornar `error`, veja o `detail` com stacktrace/resumo.
+## Observações
+- É necessário que você confirme consentimento: você fará o login manualmente na página quando o script for executado. O Nexus só recebe dados **com seu clique**.
+- Guarde NEXUS_TOKEN e credenciais com segurança.
