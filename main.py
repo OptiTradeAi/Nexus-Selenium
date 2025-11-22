@@ -1,22 +1,37 @@
-from fastapi import FastAPI, Header, HTTPException
-from selenium_core import start_selenium_loop
+import requests
+from flask import Flask, request, Response, jsonify
+import re
 
-app = FastAPI()
+app = Flask(__name__)
 
-API_TOKEN = "032318"  # seu token atual
+CORRETORA_URL = "https://www.homebroker.com/pt/sign-in"
 
-@app.on_event("startup")
-def startup_event():
-    print("[main] Starting Selenium…")
-    start_selenium_loop()
+with open("injector.js", "r", encoding="utf-8") as f:
+    INJECTOR_SCRIPT = f.read()
 
-@app.get("/")
-def root():
-    return {"status": "online", "service": "Nexus-Selenium"}
+@app.route("/hb")
+def proxy_and_inject():
+    resp = requests.get(CORRETORA_URL)
+    if resp.status_code != 200:
+        return f"Erro ao buscar a página da corretora: {resp.status_code}", 500
 
-@app.post("/trigger")
-def trigger(token: str = Header(None)):
-    if token != API_TOKEN:
-        raise HTTPException(status_code=401, detail="Invalid token")
+    html = resp.text
+    injected_html = re.sub(r"</head>", f"<script>{INJECTOR_SCRIPT}</script></head>", html, flags=re.IGNORECASE)
 
-    return {"detail": "Trigger OK"}
+    return Response(injected_html, content_type=resp.headers.get("Content-Type", "text/html"))
+
+@app.route("/capture", methods=["POST"])
+def capture():
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Nenhum dado recebido"}), 400
+
+    with open("captured_data.json", "w", encoding="utf-8") as f:
+        import json
+        json.dump(data, f, indent=2, ensure_ascii=False)
+
+    print("[CAPTURE] Dados recebidos e salvos.")
+    return jsonify({"status": "ok"}), 200
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000)
