@@ -1,61 +1,59 @@
-import time
-import json
+# selenium_core.py
 import os
+import time
+import threading
 import undetected_chromedriver as uc
 
-HOME_BROKER_URL = "https://www.homebroker.com/pt/invest"
+HB_URL = "https://www.homebroker.com/pt/sign-in"
+CHECK_INTERVAL = 10
 
-class NexusSelenium:
-    def __init__(self):
-        self.driver = None
 
-    def start(self):
-        print("[nexus] iniciando chrome…")
-        options = uc.ChromeOptions()
-        options.add_argument("--no-sandbox")
-        options.add_argument("--disable-dev-shm-usage")
-        options.add_argument("--disable-gpu")
-        options.add_argument("--disable-blink-features=AutomationControlled")
-        options.add_argument("--window-size=1280,720")
+def run_selenium():
+    print("[selenium_core] starting chromium...")
 
-        self.driver = uc.Chrome(options=options)
+    options = uc.ChromeOptions()
+    options.add_argument("--headless=new")
+    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--window-size=1280,720")
 
-        print("[nexus] abrindo corretora…")
-        self.driver.get(HOME_BROKER_URL)
-        time.sleep(8)
+    driver = uc.Chrome(options=options)
 
-        print("[nexus] iniciando varredura…")
-        scan_data = self.scan_page()
+    print("[selenium_core] loading HomeBroker login page...")
+    driver.get(HB_URL)
 
-        print("[nexus] salvando dados…")
-        self.save_scan(scan_data)
+    print("[selenium_core] waiting for user login...")
+    print(">>> Diego: ACESSE ESSE LINK NO NAVEGADOR PARA LOGIN MANUAL <<<")
+    print(">>> https://www.homebroker.com/pt/sign-in <<<")
 
-    def scan_page(self):
-        data = {
-            "url": self.driver.current_url,
-            "title": self.driver.title,
-            "elements": []
-        }
+    # Ele apenas observa sem travar
+    while True:
+        try:
+            current = driver.current_url
+            if "invest" in current or "home" in current:
+                print("[selenium_core] Login detected. Monitoring DOM...")
+                break
 
-        elems = self.driver.find_elements("xpath", "//*")
-        for e in elems:
-            try:
-                info = {
-                    "tag": e.tag_name,
-                    "type": e.get_attribute("type"),
-                    "id": e.get_attribute("id"),
-                    "name": e.get_attribute("name"),
-                    "class": e.get_attribute("class"),
-                    "text": e.text[:200]
-                }
-                data["elements"].append(info)
-            except:
-                pass
+        except Exception:
+            pass
 
-        return data
+        time.sleep(2)
 
-    def save_scan(self, data):
-        os.makedirs("/app/data", exist_ok=True)
-        with open("/app/data/scan.json", "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=4, ensure_ascii=False)
-        print("[nexus] scan salvo em /app/data/scan.json")
+    # Agora começa monitoramento
+    while True:
+        try:
+            dom = driver.page_source
+
+            with open("/app/data/dom.html", "w", encoding="utf-8") as f:
+                f.write(dom)
+
+            print("[selenium_core] DOM saved. Waiting...")
+        except Exception as e:
+            print("[selenium_core] ERROR:", e)
+
+        time.sleep(CHECK_INTERVAL)
+
+
+def start_selenium_loop():
+    thread = threading.Thread(target=run_selenium, daemon=True)
+    thread.start()
