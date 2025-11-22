@@ -1,67 +1,33 @@
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import HTMLResponse
 import os
-import uvicorn
-from selenium_core import perform_dom_learning
+from selenium_core import NexusSelenium
 
 app = FastAPI()
 
-# =====================================================
-# CONFIGURAÇÕES CARREGADAS DO ENV
-# =====================================================
-NEXUS_TOKEN = os.environ.get("NEXUS_TOKEN", "Dcrt17*")
-CAPTURE_OUTPUT = "/app/data/capture.json"
+TOKEN = os.getenv("NEXUS_TOKEN")
 
-
-def verify_token(token: str):
-    return token == NEXUS_TOKEN
-
-
-# =====================================================
-# ENDPOINT PRINCIPAL (STATUS)
-# =====================================================
 @app.get("/")
-async def root():
-    return {
-        "status": "online",
-        "service": "Nexus-Selenium",
-        "token_loaded": bool(NEXUS_TOKEN),
-        "email_loaded": bool(os.environ.get("HB_EMAIL"))
-    }
+def root():
+    return {"status": "online", "service": "Nexus-Selenium"}
 
+@app.get("/start_scan")
+def start_scan(token: str):
+    if token != TOKEN:
+        raise HTTPException(status_code=403, detail="Invalid token")
 
-# =====================================================
-# INICIA O MODO DE SCAN
-# =====================================================
-@app.post("/start_scan")
-async def start_scan(request: Request):
-    token = request.query_params.get("token")
-    if not verify_token(token):
-        raise HTTPException(status_code=403, detail="Token inválido")
+    try:
+        nexus = NexusSelenium()
+        nexus.start()
 
-    # chama o módulo selenium_core
-    result = perform_dom_learning()
-    return {"status": "scan_started", "result": result}
-
-
-# =====================================================
-# RECEBE CAPTURA (FUTURO, EXTENSÃO)
-# =====================================================
-@app.post("/capture")
-async def capture_data(request: Request):
-    token = request.query_params.get("token")
-    if not verify_token(token):
-        raise HTTPException(status_code=403, detail="Token inválido")
-
-    body = await request.json()
-    with open(CAPTURE_OUTPUT, "w") as f:
-        import json
-        json.dump(body, f, indent=4)
-
-    return {"status": "capture_saved"}
-
-
-# =====================================================
-# START SERVER
-# =====================================================
-if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=10000)
+        return HTMLResponse("""
+        <html>
+        <body style='font-family: Arial; background:#111; color:#0f0; padding:20px'>
+        <h2>Nexus Selenium – Modo SCAN Ativado</h2>
+        <p>O agente está abrindo a corretora e iniciando a análise.</p>
+        <p>Mantenha esta aba aberta por enquanto.</p>
+        </body>
+        </html>
+        """)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
