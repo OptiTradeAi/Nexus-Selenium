@@ -1,45 +1,17 @@
-import time
-import os
 import requests
+import time
 
-# =====================================================
-# CONFIG
-# =====================================================
-NEXUS_TOKEN = os.environ.get("NEXUS_TOKEN", "Dcrt17*")
-START_SCAN_URL = os.environ.get("NEXUS_START_SCAN_URL")
-CAPTURE_URL = os.environ.get("NEXUS_CAPTURE_URL")
+API_URL = "https://nexus-selenium.onrender.com/trigger"
+API_TOKEN = "032318"
 
-SCAN_FLAG_FILE = "/app/data/scan_flag.txt"
-
-
-def scan_needed():
-    return os.path.exists(SCAN_FLAG_FILE)
-
-
-def mark_scan_done():
-    if os.path.exists(SCAN_FLAG_FILE):
-        os.remove(SCAN_FLAG_FILE)
-
-
-def start_scan():
-    print("[agent] Starting SCAN...")
+def notify():
     try:
-        url = f"{START_SCAN_URL}?token={NEXUS_TOKEN}"
-        response = requests.post(url, timeout=30)
-        print("[agent] Scan response:", response.text)
-    except Exception as e:
-        print("[agent] Scan error:", str(e))
-
-
-def main():
-    print("[agent] Running. Watching scan flag...")
-
-    while True:
-        if scan_needed():
-            start_scan()
-            mark_scan_done()
-        time.sleep(5)
-
+        r = requests.post(API_URL, headers={"token": API_TOKEN})
+        print("[agent] trigger:", r.text)
+    except:
+        print("[agent] error sending trigger")
 
 if __name__ == "__main__":
-    main()
+    while True:
+        notify()
+        time.sleep(60)
