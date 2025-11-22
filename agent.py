@@ -1,17 +1,25 @@
-import requests
-import time
+import os
+from selenium_core import create_driver
+from nexus_login import NexusLogin
 
-API_URL = "https://nexus-selenium.onrender.com/trigger"
-API_TOKEN = "032318"
+def start_selenium_bot():
+    driver = create_driver()
+    login_url = os.getenv('HB_LOGIN_URL')
+    email = os.getenv('HB_EMAIL')
+    password = os.getenv('HB_PASS')
+    selectors_file = 'captured_data.json'  # arquivo salvo pelo backend
 
-def notify():
-    try:
-        r = requests.post(API_URL, headers={"token": API_TOKEN})
-        print("[agent] trigger:", r.text)
-    except:
-        print("[agent] error sending trigger")
+    if not all([login_url, email, password]):
+        print("Variáveis de ambiente HB_LOGIN_URL, HB_EMAIL e HB_PASS devem estar definidas.")
+        driver.quit()
+        return
+
+    login_agent = NexusLogin(driver, selectors_file)
+    result = login_agent.try_login(email, password, login_url)
+    print(result)
+
+    # driver.quit()  # descomente para fechar o navegador após execução
 
 if __name__ == "__main__":
-    while True:
-        notify()
-        time.sleep(60)
+    print("[AGENT] Iniciando Nexus Selenium...")
+    start_selenium_bot()
