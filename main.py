@@ -1,16 +1,21 @@
+import os
 from fastapi import FastAPI
-from agent import start_agent_cycle
+from fastapi.responses import JSONResponse
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = FastAPI()
 
 @app.get("/")
 def root():
     return {
-        "status": "Nexus Selenium ativo",
-        "agent": "executando em segundo plano"
+        "status": "online",
+        "service": "Nexus-Selenium",
+        "token_loaded": bool(os.getenv("NEXUS_TOKEN")),
+        "email_loaded": bool(os.getenv("HB_EMAIL"))
     }
 
-# inicia o agente em thread separada
-import threading
-
-threading.Thread(target=start_agent_cycle, daemon=True).start()
+@app.get("/health")
+def health():
+    return JSONResponse({"status": "ok"})
