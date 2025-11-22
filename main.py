@@ -1,35 +1,22 @@
-# main.py
-from fastapi import FastAPI, HTTPException
-import os
+from fastapi import FastAPI, Header, HTTPException
 from selenium_core import start_selenium_loop
 
 app = FastAPI()
 
-NEXUS_TOKEN = "032318"
+API_TOKEN = "032318"  # seu token atual
 
-
-@app.get("/")
-async def root():
-    return {
-        "status": "online",
-        "service": "Nexus-Selenium",
-        "token_loaded": True
-    }
-
-
-@app.get("/connect")
-async def connect(token: str = ""):
-    if token != NEXUS_TOKEN:
-        raise HTTPException(status_code=401, detail="Invalid token")
-
-    return {"status": "waiting", "step": "use /start to launch selenium"}
-
-
-@app.get("/start")
-async def start(token: str = ""):
-    if token != NEXUS_TOKEN:
-        raise HTTPException(status_code=401, detail="Invalid token")
-
+@app.on_event("startup")
+def startup_event():
+    print("[main] Starting Selenium…")
     start_selenium_loop()
 
-    return {"status": "ok", "message": "selenium started"}
+@app.get("/")
+def root():
+    return {"status": "online", "service": "Nexus-Selenium"}
+
+@app.post("/trigger")
+def trigger(token: str = Header(None)):
+    if token != API_TOKEN:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    return {"detail": "Trigger OK"}
