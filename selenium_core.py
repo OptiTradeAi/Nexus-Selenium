@@ -1,11 +1,9 @@
-# selenium_core.py
 import time
 import threading
 import undetected_chromedriver as uc
 
 HB_URL = "https://www.homebroker.com/pt/sign-in"
 CHECK_INTERVAL = 10
-
 
 def run_selenium():
     print("[selenium_core] Starting Chromium...")
@@ -22,10 +20,9 @@ def run_selenium():
     driver.get(HB_URL)
 
     print("[selenium_core] Waiting for user login...")
-    print(">>> Abra a corretora manualmente no seu navegador <<<")
+    print(">>> Abra a corretora manualmente <<<")
     print(">>> https://www.homebroker.com/pt/sign-in <<<")
 
-    # Espera até o usuário logar
     while True:
         try:
             if "invest" in driver.current_url or "home" in driver.current_url:
@@ -35,7 +32,6 @@ def run_selenium():
             pass
         time.sleep(2)
 
-    # Monitor de DOM
     while True:
         try:
             dom = driver.page_source
@@ -46,7 +42,6 @@ def run_selenium():
             print("[selenium_core] Error:", e)
 
         time.sleep(CHECK_INTERVAL)
-
 
 def start_selenium_loop():
     thread = threading.Thread(target=run_selenium, daemon=True)
