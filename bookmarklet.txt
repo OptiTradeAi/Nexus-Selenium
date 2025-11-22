@@ -1,0 +1,21 @@
+=== Como criar o Bookmarklet (PC e celular) ===
+
+1) No serviço Render, verifique a URL pública do seu Nexus, por exemplo:
+   https://nexus-selenium.onrender.com
+
+2) Substitua no código abaixo:
+   - REPLACE_WITH_YOUR_NEXUS_URL  -> https://nexus-selenium.onrender.com
+   - REPLACE_WITH_YOUR_TOKEN     -> seu valor NEXUS_TOKEN (mesmo configurado no Render)
+
+3) Bookmarklet final (cole como URL de um favorito):
+javascript:(function(){var s=document.createElement('script');s.src='https://nexus-selenium.onrender.com/injector.js';document.body.appendChild(s);})();
+
+OBS: Se preferir inline (sem hospedar injector.js), você pode minificar e colar o conteúdo do injector.js direto como URL do favorito (longa string).
+
+=== Instalar no desktop (Chrome/Firefox):
+- Criar um novo favorito -> Nome: Nexus Capture -> URL: cole o código javascript:(function(){...})(); do passo 3.
+- Acesse https://www.homebroker.com/pt/sign-in ; clique no favorito -> será executado e enviará a captura.
+
+=== Instalar no celular (Android Chrome):
+- Abra qualquer página -> toque menu -> favoritos -> adicionar -> editar favorito -> cole o javascript na URL -> depois abra a homebroker e selecione o favorito.
+- (No iOS Safari: criar favorito de qualquer página, depois editar o favorito e substituir a URL pelo javascript.)
