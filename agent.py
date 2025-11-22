@@ -1,43 +1,45 @@
-import os
 import time
+import os
 import requests
-from selenium_core import start_selenium_session, perform_dom_learning
 
-# =====================================================================
-#  TOKEN — agora ele vem automaticamente do .env (já contém Dcrt17*)
-# =====================================================================
-NEXUS_TOKEN = os.getenv("NEXUS_TOKEN")  # valor: Dcrt17*
-API_CAPTURE_URL = os.getenv("NEXUS_CAPTURE_URL")
+# =====================================================
+# CONFIG
+# =====================================================
+NEXUS_TOKEN = os.environ.get("NEXUS_TOKEN", "Dcrt17*")
+START_SCAN_URL = os.environ.get("NEXUS_START_SCAN_URL")
+CAPTURE_URL = os.environ.get("NEXUS_CAPTURE_URL")
+
+SCAN_FLAG_FILE = "/app/data/scan_flag.txt"
 
 
-def start_agent():
-    print("[NEXUS AGENT] Iniciando sessão Selenium...")
-    driver = start_selenium_session()
+def scan_needed():
+    return os.path.exists(SCAN_FLAG_FILE)
 
-    if not driver:
-        print("[ERRO] Falha ao iniciar sessão do Selenium.")
-        return
 
-    print("[NEXUS AGENT] Aguardando usuário fazer login manual.")
-    print("[NEXUS AGENT] Após login, o Nexus irá aprender automaticamente o DOM.")
+def mark_scan_done():
+    if os.path.exists(SCAN_FLAG_FILE):
+        os.remove(SCAN_FLAG_FILE)
 
-    learning_ok = perform_dom_learning(driver)
 
-    if learning_ok:
-        print("[NEXUS AGENT] DOM aprendido com sucesso. Enviando ao servidor...")
+def start_scan():
+    print("[agent] Starting SCAN...")
+    try:
+        url = f"{START_SCAN_URL}?token={NEXUS_TOKEN}"
+        response = requests.post(url, timeout=30)
+        print("[agent] Scan response:", response.text)
+    except Exception as e:
+        print("[agent] Scan error:", str(e))
 
-        data = {"status": "ok", "detail": "DOM capturado com sucesso"}
 
-        try:
-            requests.post(
-                API_CAPTURE_URL,
-                json=data,
-                headers={"Authorization": f"Bearer {NEXUS_TOKEN}"}
-            )
-        except Exception:
-            pass
+def main():
+    print("[agent] Running. Watching scan flag...")
 
-    else:
-        print("[NEXUS AGENT] Falha ao aprender DOM.")
+    while True:
+        if scan_needed():
+            start_scan()
+            mark_scan_done()
+        time.sleep(5)
 
-    print("[NEXUS AGENT] Finalizado.")
+
+if __name__ == "__main__":
+    main()
