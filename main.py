@@ -1,39 +1,16 @@
-from fastapi import FastAPI, Request, HTTPException
-from agent import start_agent
-import os
+from fastapi import FastAPI
+from agent import start_agent_cycle
 
 app = FastAPI()
 
-# =====================================================================
-#  TOKEN VEM DO .env (Dcrt17*)
-# =====================================================================
-NEXUS_TOKEN = os.getenv("NEXUS_TOKEN")
-
-
 @app.get("/")
 def root():
-    return {"status": "online", "message": "Nexus Selenium ativo."}
+    return {
+        "status": "Nexus Selenium ativo",
+        "agent": "executando em segundo plano"
+    }
 
+# inicia o agente em thread separada
+import threading
 
-@app.get("/start")
-def start():
-    start_agent()
-    return {"status": "ok", "detail": "Selenium iniciado. Faça login na corretora."}
-
-
-@app.post("/capture")
-async def capture(request: Request):
-    auth = request.headers.get("Authorization")
-
-    if not auth or not auth.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Token ausente")
-
-    token = auth.replace("Bearer ", "")
-
-    if token != NEXUS_TOKEN:
-        raise HTTPException(status_code=403, detail="Token inválido")
-
-    data = await request.json()
-    print("[CAPTURE]", data)
-
-    return {"status": "salvo"}
+threading.Thread(target=start_agent_cycle, daemon=True).start()
