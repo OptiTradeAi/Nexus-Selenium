@@ -16,5 +16,5 @@ RUN apt-get update && apt-get install -y \
 
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Rodar o backend Flask (proxy reverso + captura)
+# Comando para rodar o Flask app main.py
 CMD ["python", "main.py"]
