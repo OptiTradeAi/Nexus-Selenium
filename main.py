@@ -1,14 +1,15 @@
 # main.py
 import os
 import logging
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
 from dotenv import load_dotenv
+import json, time
 
 load_dotenv()
 PORT = int(os.getenv("PORT", "10000"))
 
-# Importa a rotina que inicializa o Selenium (ver selenium_core.py)
+# importa start_selenium_loop do selenium_core
 try:
     from selenium_core import start_selenium_loop
 except Exception as e:
@@ -43,20 +44,6 @@ def root():
     """
     return HTMLResponse(content=html)
 
-@app.post("/capture")
-async def capture(request: Request):
-    token_header = request.headers.get("X-Nexus-Token") or request.query_params.get("token")
-    expected = os.getenv("NEXUS_CAPTURE_SECRET")
-    if expected and token_header != expected:
-        return JSONResponse(status_code=403, content={"detail": "Invalid token"})
-    payload = await request.json()
-    os.makedirs("/app/data", exist_ok=True)
-    import json, time
-    path = f"/app/data/capture_{int(time.time())}.json"
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(payload, f, ensure_ascii=False, indent=2)
-    return {"detail": "saved", "path": path}
-
 @app.get("/injector", response_class=HTMLResponse)
 def injector():
     html = """
@@ -72,9 +59,31 @@ def injector():
           const iframe = document.getElementById('hb');
           iframe.src = "https://www.homebroker.com/pt/sign-in";
         }
-        // Opcional: instruções para o usuário executar o bookmarklet/console
+        // instruções para o usuário executar o bookmarklet/console
         </script>
       </body>
     </html>
     """
     return HTMLResponse(content=html)
+
+@app.post("/capture")
+async def capture(request: Request):
+    # salva o payload recebido pelo scanner.js em selectors.json (sobrescreve)
+    token_header = request.headers.get("X-Nexus-Token") or request.query_params.get("token")
+    expected = os.getenv("NEXUS_CAPTURE_SECRET")
+    if expected and token_header != expected:
+        raise HTTPException(status_code=403, detail="Invalid token")
+    payload = await request.json()
+    os.makedirs("/app/data", exist_ok=True)
+    path = "/app/data/selectors.json"
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False, indent=2)
+    return {"detail": "saved", "path": path}
+
+@app.get("/selectors")
+def get_selectors():
+    p = "/app/data/selectors.json"
+    if not os.path.exists(p):
+        return JSONResponse(status_code=404, content={"detail":"not found"})
+    with open(p,"r",encoding="utf-8") as f:
+        return json.load(f)
