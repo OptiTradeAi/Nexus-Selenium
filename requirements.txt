@@ -1,6 +1,5 @@
-fastapi==0.121.3
-uvicorn==0.21.1
-python-dotenv==1.2.1
-undetected-chromedriver==3.5.5
-selenium==4.38.0
-requests==2.32.5
+fastapi
+uvicorn
+selenium
+webdriver-manager
+python-dotenv
