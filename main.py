@@ -2,12 +2,15 @@ from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 import threading
 from selenium_core import selenium_core
+from contextlib import asynccontextmanager
 
-app = FastAPI()
-
-@app.on_event("startup")
-async def startup_event():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Iniciar Selenium em thread separada
     threading.Thread(target=selenium_core.start, daemon=True).start()
+    yield
+
+app = FastAPI(lifespan=lifespan)
 
 @app.get("/")
 def root():
