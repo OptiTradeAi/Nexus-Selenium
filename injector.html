@@ -1,0 +1,19 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Nexus Injector</title></head>
+<body>
+  <h3>Nexus Injector</h3>
+  <p>Clique para abrir HomeBroker; depois execute o bookmarklet (scanner.js) na página real para capturar seletores.</p>
+  <button onclick="openHB()">Abrir HomeBroker</button>
+  <iframe id="frame" style="width:100%;height:80vh;border:1px solid #ccc"></iframe>
+  <script>
+    function openHB(){
+      const f = document.getElementById('frame');
+      f.src = "https://www.homebroker.com/pt/sign-in";
+    }
+    // configure token/url se quiser facilitar (temporário)
+    window.NEXUS_CAPTURE_URL = "/capture";
+    window.NEXUS_CAPTURE_TOKEN = "Dcrt17*";
+  </script>
+</body>
+</html>
