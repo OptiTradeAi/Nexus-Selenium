@@ -1,30 +1,39 @@
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
-import threading
-from selenium_core import selenium_core
 from contextlib import asynccontextmanager
+import threading
+
+from selenium_core import selenium_core
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Iniciar Selenium em thread separada
+    # Inicia o Selenium em thread separada
     threading.Thread(target=selenium_core.start, daemon=True).start()
     yield
 
+
 app = FastAPI(lifespan=lifespan)
+
 
 @app.get("/")
 def root():
-    return {"status": "online", "selenium": selenium_core.ready}
+    return {
+        "status": "online",
+        "selenium_ready": selenium_core.ready
+    }
+
 
 @app.get("/open")
-def abrir_home():
+def open_home():
     url = "https://www.homebroker.com.br/pt/invest"
-    resposta = selenium_core.open(url)
-    return {"status": resposta}
+    result = selenium_core.open(url)
+    return {"result": result}
+
 
 @app.get("/source")
-def pegar_dom():
-    dom = selenium_core.get_source()
-    if dom:
-        return HTMLResponse(dom)
-    return {"erro": "driver não iniciou"}
+def source():
+    html = selenium_core.get_source()
+    if html:
+        return HTMLResponse(html)
+    return {"error": "selenium não carregou ainda"}
