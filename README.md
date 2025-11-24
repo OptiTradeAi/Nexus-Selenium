@@ -1,36 +1,24 @@
-# Nexus-Selenium — Quick Start
+# Nexus-Selenium (Atualizado)
 
-## O que este repositório contém
-- Serviço que roda no Render (ou Docker) com Selenium (undetected-chromedriver).
-- Endpoint `/injector.js` e instruções para criar um *bookmarklet* que, ao executar na página da HomeBroker, envia captura de DOM/seletores para o Nexus.
-- Agent que usa os dados capturados para realizar login automático.
+Resumo:
+- Serviço FastAPI que expõe /injector e /capture.
+- Selenium (undetected-chromedriver) roda em background e salva /app/data/dom.html.
+- Fluxo recomendado: usar bookmarklet (scanner.js) no browser real para capturar seletores e enviar ao /capture.
 
-## Arquivos principais
-- `agent.py` — processo principal que inicio o servidor e o loop Selenium.
-- `main.py` — endpoints FastAPI: status, capture.
-- `selenium_core.py` — rotinas Selenium (login automático usando seletores salvos).
-- `utils.py` — helpers para salvar dados.
-- `injector.js` — script que deve ser executado da HomeBroker para enviar dados para o Nexus.
-- `bookmarklet.txt` — instruções para criar o bookmarklet.
+Configuração:
+1. No Render -> Environment variables crie:
+   - PORT=10000
+   - NEXUS_TOKEN=Dcrt17*
+   - NEXUS_CAPTURE_SECRET=Dcrt17*
+   - HB_EMAIL (opcional)
+   - HB_PASSWORD (opcional)
 
-## Variáveis de ambiente (Render / Environment)
-Adicione estas variáveis no painel do Render (Environment > Environment Variables):
+2. Faça deploy (Docker) com Dockerfile no root. Docker build context: `.`
+3. Acesse: https://<seu-servico>.onrender.com/injector
+4. No celular, abra a página da corretora (via injector ou direto), execute o bookmarklet (scanner.js) — o scanner enviará os seletores para /capture.
+5. Depois de salvar a captura em /app/data, o selenium_core pode usar os seletores para login automático.
 
-- `NEXUS_TOKEN` = token secreto que protege o endpoint `/capture`
-- `NEXUS_CAPTURE_URL` = https://nexus-selenium.onrender.com/capture (ou a URL do seu serviço)
-- `HB_EMAIL` = (opcional) email da conta HomeBroker para auto-login
-- `HB_PASSWORD` = (opcional) senha da conta HomeBroker
-- `HB_KEEP_DAYS` = tempo (dias) de retenção da sessão/credenciais (ex: 7)
-
-## Passo-a-passo rápido (deploy + captura)
-1. Substitua/adicione os arquivos neste repositório.
-2. Configure as Environment Variables no Render conforme acima.
-3. Deploy no Render (ou `docker build` locally).
-4. Após o serviço ficar online abra `https://<sua-url>/injector.js` — ou pegue o código do `bookmarklet.txt`.
-5. Crie o bookmarklet no seu navegador (ou no celular — instruções no bookmarklet.txt).
-6. Acesse `https://www.homebroker.com/pt/sign-in`, clique no bookmarklet, faça login. O Nexus receberá a estrutura do DOM e salvará seletores.
-7. O agent tentará usar esses seletores para logar automaticamente.
-
-## Observações
-- É necessário que você confirme consentimento: você fará o login manualmente na página quando o script for executado. O Nexus só recebe dados **com seu clique**.
-- Guarde NEXUS_TOKEN e credenciais com segurança.
+Problemas comuns:
+- Access restricted por região: use VPN/região permitida.
+- Iframe/CORS: a injeção cross-origin pode ser bloqueada — use bookmarklet direto na página real (recomendado).
+- Token inválido: verifique NEXUS_CAPTURE_SECRET e header X-Nexus-Token no envio.
