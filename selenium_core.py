@@ -1,62 +1,44 @@
+# selenium_core.py
+import os
 import time
 import threading
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
+import undetected_chromedriver as uc
 
-class SeleniumCore:
-    def __init__(self):
-        self.driver = None
-        self.ready = False
+HB_URL = os.getenv("HB_URL", "https://www.homebroker.com/pt/sign-in")
+CHECK_INTERVAL = int(os.getenv("CHECK_INTERVAL", "10"))
 
-    def start(self):
-        print("[selenium_core] iniciando driver...")
-
-        chrome_options = Options()
-        chrome_options.add_argument("--headless=new")
-        chrome_options.add_argument("--no-sandbox")
-        chrome_options.add_argument("--disable-gpu")
-        chrome_options.add_argument("--disable-dev-shm-usage")
-        chrome_options.add_argument("--disable-blink-features=AutomationControlled")
-        chrome_options.add_argument("--remote-debugging-port=9222")
-        chrome_options.add_argument("--window-size=1920,1080")
-
-        chrome_options.binary_location = "/usr/bin/google-chrome"
-
+def run_selenium():
+    print("[selenium_core] Starting Chromium...")
+    options = uc.ChromeOptions()
+    options.add_argument("--headless=new")
+    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--window-size=1280,720")
+    driver = uc.Chrome(options=options)
+    print("[selenium_core] Opening HomeBroker login page...")
+    driver.get(HB_URL)
+    print("[selenium_core] Waiting for user login or URL change...")
+    while True:
         try:
-            self.driver = webdriver.Chrome(
-                executable_path="/usr/bin/chromedriver",
-                options=chrome_options
-            )
-            self.ready = True
-            print("[selenium_core] driver iniciado com sucesso")
-        except Exception as e:
-            print("[selenium_core] falha criando driver:", e)
-            return
-
-        # Manter vivo
-        threading.Thread(target=self._keep_alive, daemon=True).start()
-
-    def _keep_alive(self):
-        while True:
-            try:
-                _ = self.driver.title
-            except Exception:
-                print("[selenium_core] driver desconectado")
+            cur = driver.current_url or ""
+            if any(x in cur for x in ("invest","home","/dashboard")):
+                print("[selenium_core] Login detectado por URL:", cur)
                 break
-            time.sleep(5)
+        except Exception:
+            pass
+        time.sleep(2)
+    while True:
+        try:
+            dom = driver.page_source
+            os.makedirs("/app/data", exist_ok=True)
+            with open("/app/data/dom.html", "w", encoding="utf-8") as f:
+                f.write(dom)
+            print("[selenium_core] DOM atualizado.")
+        except Exception as e:
+            print("[selenium_core] Error writing DOM:", e)
+        time.sleep(CHECK_INTERVAL)
 
-    def open(self, url):
-        if not self.ready:
-            return "Driver não iniciado"
-
-        print("[selenium_core] abrindo página:", url)
-        self.driver.get(url)
-        time.sleep(3)
-        return "Página carregada"
-
-    def get_source(self):
-        if not self.ready:
-            return None
-        return self.driver.page_source
-
-selenium_core = SeleniumCore()
+def start_selenium_loop():
+    t = threading.Thread(target=run_selenium, daemon=True)
+    t.start()
+    print("[selenium_core] Selenium thread started.")
