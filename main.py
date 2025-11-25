@@ -1,30 +1,46 @@
-from fastapi import FastAPI, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi import FastAPI, Request, Header
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
-import json, os
+import os, json
 
 app = FastAPI()
 
-# Servir arquivos estáticos
+TOKEN = os.getenv("NEXUS_TOKEN", "")
+BASE = os.getenv("NEXUS_BASE_URL", "")
+CAPTURE_FILE = "/app/data/last_capture.json"
+
+# Servir /static
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
-# Página inicial → serve o injector.html
-@app.get("/")
-async def index():
-    return FileResponse("injector.html")
+@app.get("/", response_class=HTMLResponse)
+async def root():
+    return f"""
+    <html>
+    <head>
+      <title>Nexus Entry</title>
+      <script src='/static/loader.js?ts={int(os.times()[4])}'></script>
+    </head>
+    <body>
+      <h1>Nexus Selenium Online ✔</h1>
+      <p>Token carregado: {TOKEN}</p>
+      <p>Clique no bookmarklet para ativar.</p>
+    </body>
+    </html>
+    """
 
 
-# Endpoint para receber dados do scanner
 @app.post("/capture")
-async def capture(request: Request):
-    data = await request.json()
+async def capture(req: Request, x_nexus_token: str = Header(None)):
+    if x_nexus_token != TOKEN:
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
 
-    os.makedirs("data", exist_ok=True)
+    data = await req.json()
 
-    with open("data/capture.json", "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=4, ensure_ascii=False)
+    try:
+        with open(CAPTURE_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+    except Exception as e:
+        return JSONResponse({"status": "error", "details": str(e)}, status_code=500)
 
-    print("[NEXUS] Dados recebidos do scanner:", data.keys())
-
-    return JSONResponse({"status": "ok"})
+    return {"status": "ok", "received": True}
