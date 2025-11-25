@@ -1,60 +1,32 @@
-// static/loader.js
-(function () {
-    console.log("Nexus Loader iniciado…");
+(function(){
 
-    const TARGET = "https://www.homebroker.com/pt/invest";
+  const BASE = window.location.origin;
+  const TOKEN = "032318";
 
-    // URL do scanner interno hospedado na Render
-    const SCANNER_URL = "/static/scanner.js";
+  function loadScript(src){
+      return new Promise((resolve)=>{
+          const s = document.createElement("script");
+          s.src = src + "?ts=" + Date.now();
+          s.onload = resolve;
+          document.head.appendChild(s);
+      });
+  }
 
-    // endpoint de captura no backend
-    const CAPTURE_ENDPOINT = "/capture";
+  async function start(){
+      console.log("NEXUS LOADER iniciado");
 
-    // iframe container
-    const frame = document.createElement("iframe");
-    frame.src = TARGET;
-    frame.style.width = "100vw";
-    frame.style.height = "100vh";
-    frame.style.border = "none";
-    frame.style.position = "fixed";
-    frame.style.top = "0";
-    frame.style.left = "0";
-    frame.allow = "clipboard-read; clipboard-write;";
+      // Exportar variáveis globais para outros scripts
+      window.NEXUS_TOKEN_INJECT = TOKEN;
+      window.NEXUS_CAPTURE_ENDPOINT = BASE + "/capture";
+      window.NEXUS_BASE = BASE;
 
-    document.body.innerHTML = ""; // limpa tudo e coloca só o iframe
-    document.body.appendChild(frame);
+      await loadScript(BASE + "/static/scanner.js");
+      await loadScript(BASE + "/static/activity_keeper.js");
+      await loadScript(BASE + "/static/pair_manager.js");
 
-    console.log("Iframe criado e apontado para:", TARGET);
+      console.log("NEXUS: todos os módulos carregados com sucesso.");
+  }
 
-    // injeção após carregar
-    frame.onload = () => {
-        console.log("Página carregada dentro do iframe. Injetando scanner…");
-
-        try {
-            const win = frame.contentWindow;
-            const doc = frame.contentDocument;
-
-            // cria elemento script
-            const injector = doc.createElement("script");
-            injector.src = SCANNER_URL;
-
-            // passa o endpoint e token para dentro da página
-            injector.onload = () => {
-                try {
-                    win.NEXUS_CAPTURE_ENDPOINT = CAPTURE_ENDPOINT;
-                    win.NEXUS_TOKEN_INJECT = "";
-                } catch (e) {
-                    console.warn("Falha ao setar variáveis no iframe:", e);
-                }
-            };
-
-            doc.head.appendChild(injector);
-
-            console.log("Scanner injetado com sucesso!");
-
-        } catch (err) {
-            console.error("Erro ao injetar script:", err);
-        }
-    };
+  start();
 
 })();
