@@ -1,60 +1,30 @@
-<!-- static/injector.html -->
-<!doctype html>
-<html>
+<!DOCTYPE html>
+<html lang="pt-BR">
 <head>
-  <meta charset="utf-8" />
-  <title>Nexus Injector — Install Bookmarklet</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <style>
-    body{font-family:Inter,Arial,sans-serif;max-width:900px;margin:20px auto;padding:20px}
-    pre{background:#111;color:#fff;padding:12px;border-radius:6px;overflow:auto}
-    .box{border:1px solid #ddd;padding:14px;border-radius:8px;margin-bottom:12px}
-    a.btn{display:inline-block;padding:10px 14px;background:#0a84ff;color:#fff;border-radius:6px;text-decoration:none}
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nexus Auto-Link</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #111;
+            color: #fff;
+            text-align: center;
+            padding-top: 40px;
+        }
+        h2 {
+            font-weight: 300;
+            margin-bottom: 20px;
+        }
+    </style>
 </head>
 <body>
-  <h1>Nexus Injector — Bookmarklet</h1>
-  <div class="box">
-    <p>Passo rápido (recomendado):</p>
-    <ol>
-      <li>Arraste o botão <strong>"NEXUS SCAN"</strong> para a barra de favoritos do seu navegador no desktop, ou copie o código do bookmarklet e crie um favorito no seu celular com esse código.</li>
-      <li>Abra <a href="https://www.homebroker.com/pt/sign-in" target="_blank">https://www.homebroker.com/pt/sign-in</a> no mesmo navegador (mobile ou desktop).</li>
-      <li>Na página da corretora clique no favorito <strong>NEXUS SCAN</strong> (bookmarklet). O scanner vai rodar na página e enviar os seletores para o Nexus (Render).</li>
-    </ol>
-    <p>OBS: o scanner <em>não</em> lê seus valores de login/senha; apenas identifica os seletores (onde estão os campos).</p>
-  </div>
 
-  <div class="box">
-    <a class="btn" href="javascript:(function(){var s=document.createElement('script');s.src=location.protocol+'//'+location.host+'/static/scanner.js?ts='+Date.now();document.body.appendChild(s);} )();">NEXUS SCAN (arraste para favoritos)</a>
-    <p style="font-size:13px;color:#666;margin-top:8px">Se não puder arrastar (mobile), copie o conteúdo abaixo e cole como URL de um novo favorito.</p>
-    <pre id="bm">javascript:(function(){var s=document.createElement('script');s.src=location.protocol+'//'+location.host+'/static/scanner.js?ts='+Date.now();document.body.appendChild(s);} )();</pre>
-  </div>
+    <h2>🔗 Nexus – Conectando ao HomeBroker…</h2>
+    <p>Se a página não abrir em alguns segundos, recarregue.</p>
 
-  <div class="box">
-    <h3>Configurar Token (no Render)</h3>
-    <p>Vá no painel da Render → sua service → Environment → adicione uma variável:</p>
-    <pre>NEXUS_TOKEN = your-secret-token</pre>
-    <p>O bookmarklet/Scanner não inclui o token automaticamente. Ao executar o scanner ele usará a URL <code>/capture</code> do seu serviço e o header <code>X-NEXUS-TOKEN</code> será enviado pelo bookmarklet automaticamente apenas se você criar um pequeno favorito que defina <code>NEXUS_TOKEN_INJECT</code>. Veja README para alternativas e detalhes.</p>
-  </div>
+    <!-- Carrega o script responsável por abrir o iframe e injetar o scanner -->
+    <script src="/static/loader.js"></script>
 
-  <div class="box">
-    <h3>Se preferir: usar a versão com token “one-click”</h3>
-    <p>Se você quer que o bookmarklet inclua o token automaticamente (mais simples), copie este código e crie um favorito com este conteúdo, substituindo <code>YOUR_TOKEN</code> pelo valor da variável NEXUS_TOKEN que você definiu no Render:</p>
-    <pre id="bm_token">javascript:(function(){window.NEXUS_TOKEN_INJECT='YOUR_TOKEN';var s=document.createElement('script');s.src=location.protocol+'//'+location.host+'/static/scanner.js?ts='+Date.now();document.body.appendChild(s);} )();</pre>
-    <p><strong>Importante:</strong> por segurança é preferível definir o token no Render e não deixar o token salvo em um favorito acessível publicamente. Se for seu ambiente dev/teste, você pode usar essa opção.</p>
-  </div>
-
-  <div class="box">
-    <h3>Como usar no celular (resumo)</h3>
-    <ol>
-      <li>Abra este page no navegador do celular (ex: Chrome/Android ou Safari/iOS) — o endereço é a URL do seu Render service.</li>
-      <li>Copie o código do bookmarklet (um dos dois caixa acima).</li>
-      <li>Crie um novo favorito e cole o código como URL do favorito.</li>
-      <li>Abra a página da corretora e toque no favorito criado.</li>
-    </ol>
-  </div>
-
-  <hr/>
-  <small>Made for Nexus — scanner does not collect credential values.</small>
 </body>
 </html>
