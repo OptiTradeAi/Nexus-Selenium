@@ -1,80 +1,79 @@
 # main.py
+from fastapi import FastAPI, Request, Header, HTTPException
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 import os
-import logging
-from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, JSONResponse
-from dotenv import load_dotenv
+import json
+from datetime import datetime
 
-load_dotenv()
-PORT = int(os.getenv("PORT", "10000"))
+app = FastAPI()
 
-# Importa a rotina que inicializa o Selenium (ver selenium_core.py)
-try:
-    from selenium_core import start_selenium_loop
-except Exception as e:
-    start_selenium_loop = None
-    logging.exception("Não foi possível importar start_selenium_loop: %s", e)
+# Diretório para armazenar capturas
+DATA_DIR = "/app/data"
+os.makedirs(DATA_DIR, exist_ok=True)
 
-app = FastAPI(title="Nexus-Selenium")
+# Token de verificação (defina via environment variable NEXUS_TOKEN no Render)
+NEXUS_TOKEN = os.getenv("NEXUS_TOKEN", "")
 
-@app.on_event("startup")
-def startup_event():
-    logging.info("Startup event: iniciando selenium loop (se disponível).")
-    if callable(start_selenium_loop):
-        try:
-            start_selenium_loop()
-            logging.info("Selenium loop iniciado.")
-        except Exception:
-            logging.exception("Erro ao iniciar selenium loop.")
-    else:
-        logging.warning("start_selenium_loop não disponível. Verifique selenium_core.py")
+# Serve arquivos estáticos (injector.html + assets se houver)
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
 
 @app.get("/", response_class=HTMLResponse)
-def root():
-    html = """
-    <html>
-      <head><title>Nexus-Selenium</title></head>
-      <body>
-        <h2>Nexus Selenium</h2>
-        <p>Status: online</p>
-        <p>Acesse <a href="/injector">/injector</a> no seu celular para abrir a HomeBroker e iniciar captura.</p>
-      </body>
-    </html>
-    """
-    return HTMLResponse(content=html)
+async def root():
+    # Redireciona para injector (arquivo estático)
+    index_path = os.path.join("static", "injector.html")
+    if os.path.exists(index_path):
+        return FileResponse(index_path, media_type="text/html")
+    return HTMLResponse("<h3>Injector not found. Put injector.html in /static</h3>", status_code=404)
+
 
 @app.post("/capture")
-async def capture(request: Request):
-    token_header = request.headers.get("X-Nexus-Token") or request.query_params.get("token")
-    expected = os.getenv("NEXUS_CAPTURE_SECRET")
-    if expected and token_header != expected:
-        return JSONResponse(status_code=403, content={"detail": "Invalid token"})
-    payload = await request.json()
-    os.makedirs("/app/data", exist_ok=True)
-    import json, time
-    path = f"/app/data/capture_{int(time.time())}.json"
+async def capture(request: Request, x_nexus_token: str | None = Header(None)):
+    """
+    Recebe o JSON com metadados do scanner.
+    Exige header X-NEXUS-TOKEN com o token configurado no Render para autenticação.
+    """
+    if not NEXUS_TOKEN:
+        raise HTTPException(status_code=500, detail="Server misconfigured: NEXUS_TOKEN not set on server.")
+    if x_nexus_token != NEXUS_TOKEN:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    try:
+        payload = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON")
+
+    # Enforce we do NOT receive credentials - if present, reject (safety)
+    if isinstance(payload, dict) and ("username_value" in payload or "password_value" in payload):
+        # defensive: never accept credential values
+        raise HTTPException(status_code=400, detail="Credentials not allowed in payload")
+
+    ts = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+    filename = f"capture_{ts}.json"
+    path = os.path.join(DATA_DIR, filename)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False, indent=2)
-    return {"detail": "saved", "path": path}
 
-@app.get("/injector", response_class=HTMLResponse)
-def injector():
-    html = """
-    <!doctype html>
-    <html>
-      <head><meta charset="utf-8"><title>Injector</title></head>
-      <body>
-        <h3>Injector — abra a HomeBroker e inicie captura</h3>
-        <p><button onclick="openFrame()">Abrir HomeBroker</button></p>
-        <iframe id="hb" src="about:blank" style="width:100%;height:80vh;border:1px solid #ccc"></iframe>
-        <script>
-        function openFrame(){
-          const iframe = document.getElementById('hb');
-          iframe.src = "https://www.homebroker.com/pt/sign-in";
-        }
-        // Opcional: instruções para o usuário executar o bookmarklet/console
-        </script>
-      </body>
-    </html>
-    """
-    return HTMLResponse(content=html)
+    return JSONResponse({"status": "ok", "saved": filename})
+
+
+@app.get("/captures")
+async def list_captures():
+    """Lista arquivos no diretório /app/data"""
+    files = []
+    for f in sorted(os.listdir(DATA_DIR), reverse=True):
+        if f.endswith(".json"):
+            files.append({
+                "file": f,
+                "path": f"/data/{f}"
+            })
+    return {"captures": files}
+
+
+@app.get("/data/{filename}")
+async def get_capture_file(filename: str):
+    path = os.path.join(DATA_DIR, filename)
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="Not found")
+    return FileResponse(path, media_type="application/json")
