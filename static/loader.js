@@ -1,32 +1,33 @@
-(function(){
+(function() {
 
-  const BASE = window.location.origin;
-  const TOKEN = "032318";
+    const RENDER_BASE = "https://nexus-selenium.onrender.com";
+    const TOKEN = "032318";
 
-  function loadScript(src){
-      return new Promise((resolve)=>{
-          const s = document.createElement("script");
-          s.src = src + "?ts=" + Date.now();
-          s.onload = resolve;
-          document.head.appendChild(s);
-      });
-  }
+    function loadScript(src){
+        return new Promise((resolve)=>{
+            const s = document.createElement("script");
+            s.src = src + "?ts=" + Date.now();
+            s.onload = resolve;
+            document.head.appendChild(s);
+        });
+    }
 
-  async function start(){
-      console.log("NEXUS LOADER iniciado");
+    async function start(){
+        console.log("🔥 NEXUS LOADER iniciado + conectado ao servidor Render");
 
-      // Exportar variáveis globais para outros scripts
-      window.NEXUS_TOKEN_INJECT = TOKEN;
-      window.NEXUS_CAPTURE_ENDPOINT = BASE + "/capture";
-      window.NEXUS_BASE = BASE;
+        // Variáveis globais para scanner.js, activity_keeper.js e pair_manager.js
+        window.NEXUS_TOKEN_INJECT = TOKEN;
+        window.NEXUS_CAPTURE_ENDPOINT = RENDER_BASE + "/api/dom";
+        window.NEXUS_BASE = RENDER_BASE;
 
-      await loadScript(BASE + "/static/scanner.js");
-      await loadScript(BASE + "/static/activity_keeper.js");
-      await loadScript(BASE + "/static/pair_manager.js");
+        // Carregar módulos diretamente do servidor Render (sempre funciona)
+        await loadScript(RENDER_BASE + "/static/scanner.js");
+        await loadScript(RENDER_BASE + "/static/activity_keeper.js");
+        await loadScript(RENDER_BASE + "/static/pair_manager.js");
 
-      console.log("NEXUS: todos os módulos carregados com sucesso.");
-  }
+        console.log("⚡ NEXUS: todos os módulos carregados e ativos.");
+    }
 
-  start();
+    start();
 
 })();
