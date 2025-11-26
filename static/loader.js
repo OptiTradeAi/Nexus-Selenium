@@ -1,33 +1,33 @@
-(function() {
+(function(){
 
-    const RENDER_BASE = "https://nexus-selenium.onrender.com";
-    const TOKEN = "032318";
+  const BASE = window.location.origin;
+  const TOKEN = "032318";
 
-    function loadScript(src){
-        return new Promise((resolve)=>{
-            const s = document.createElement("script");
-            s.src = src + "?ts=" + Date.now();
-            s.onload = resolve;
-            document.head.appendChild(s);
-        });
-    }
+  function loadScript(src){
+      return new Promise((resolve)=>{
+          const s = document.createElement("script");
+          s.src = src + "?ts=" + Date.now();
+          s.onload = resolve;
+          s.onerror = function(){ console.warn("Failed loading", src); resolve(); };
+          document.head.appendChild(s);
+      });
+  }
 
-    async function start(){
-        console.log("🔥 NEXUS LOADER iniciado + conectado ao servidor Render");
+  async function start(){
+      console.log("NEXUS LOADER iniciado");
 
-        // Variáveis globais para scanner.js, activity_keeper.js e pair_manager.js
-        window.NEXUS_TOKEN_INJECT = TOKEN;
-        window.NEXUS_CAPTURE_ENDPOINT = RENDER_BASE + "/api/dom";
-        window.NEXUS_BASE = RENDER_BASE;
+      // Exportar variáveis globais para outros scripts
+      window.NEXUS_TOKEN_INJECT = TOKEN;
+      window.NEXUS_CAPTURE_ENDPOINT = BASE + "/capture";
+      window.NEXUS_BASE = BASE;
 
-        // Carregar módulos diretamente do servidor Render (sempre funciona)
-        await loadScript(RENDER_BASE + "/static/scanner.js");
-        await loadScript(RENDER_BASE + "/static/activity_keeper.js");
-        await loadScript(RENDER_BASE + "/static/pair_manager.js");
+      await loadScript(BASE + "/static/scanner.js");
+      await loadScript(BASE + "/static/activity_keeper.js").catch(()=>{});
+      await loadScript(BASE + "/static/pair_manager.js").catch(()=>{});
 
-        console.log("⚡ NEXUS: todos os módulos carregados e ativos.");
-    }
+      console.log("NEXUS: todos os módulos carregados com sucesso.");
+  }
 
-    start();
+  start();
 
 })();
