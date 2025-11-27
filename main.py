@@ -1,95 +1,69 @@
+# main.py
+import os
+import json
 from fastapi import FastAPI, Request, Header
 from fastapi.responses import RedirectResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-import os
-import json
-from threading import Thread
-import time
-
-# token para validar origem
-BACKEND_TOKEN = os.getenv("TOKEN", "032318")
+from typing import Optional
 
 app = FastAPI()
 
-# serve arquivos estáticos (loader, scanner etc)
+# Token (env)
+BACKEND_TOKEN = os.getenv("NEXUS_TOKEN", "032318")
+
+# Static files (static/ must exist)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# endpoints simples
 @app.get("/")
 def root():
-    # redireciona para a HomeBroker login
+    # redirect user directly to HomeBroker login page (useful for manual tests)
     return RedirectResponse("https://www.homebroker.com/pt/sign-in")
 
 @app.get("/ping")
 def ping():
     return {"status": "online", "token": BACKEND_TOKEN}
 
-# endpoint que o scanner + selenium envia (dados de captura / eventos)
+# Endpoint to receive arbitrary captures from client-side scripts
 @app.post("/capture")
-async def capture(req: Request, x_nexus_token: str | None = Header(None)):
+async def capture(payload: Request, x_nexus_token: Optional[str] = Header(None)):
     try:
         if x_nexus_token != BACKEND_TOKEN:
-            return JSONResponse({"ok": False, "reason": "invalid token"}, status_code=403)
-        payload = await req.json()
-        # salva payload para debug
-        ts = int(time.time())
-        filename = f"/app/data/capture_{ts}.json"
-        with open(filename, "w", encoding="utf-8") as f:
-            json.dump(payload, f, ensure_ascii=False, indent=2)
-        print(f"[/capture] Received payload: {payload.get('event','no-event')} url: [{payload.get('url')}]")
-        return {"ok": True}
+            return JSONResponse({"error": "invalid token"}, status_code=403)
+        data = await payload.json()
+        # Save capture with timestamp
+        os.makedirs("/app/data/captures", exist_ok=True)
+        fname = f"/app/data/captures/capture_{int(__import__('time').time())}.json"
+        with open(fname, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        return {"status": "ok", "saved": fname}
     except Exception as e:
-        print("[/capture] error:", e)
-        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+        return JSONResponse({"error": str(e)}, status_code=500)
 
-# endpoint para salvar cookies (opcional — ativar apenas com consentimento)
-@app.post("/save_cookies")
-async def save_cookies(req: Request, x_nexus_token: str | None = Header(None)):
-    try:
-        if x_nexus_token != BACKEND_TOKEN:
-            return JSONResponse({"ok": False, "reason": "invalid token"}, status_code=403)
-        payload = await req.json()
-        with open("/app/data/saved_cookies.json", "w", encoding="utf-8") as f:
-            json.dump(payload, f, ensure_ascii=False, indent=2)
-        print("[/save_cookies] Cookies/localStorage saved.")
-        return {"ok": True}
-    except Exception as e:
-        print("[/save_cookies] error:", e)
-        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
-
-# API endpoint to accept DOM snippets saved by Selenium
+# Minimal API for selenium to post DOM snippets
 @app.post("/api/dom")
-async def api_dom(req: Request, x_nexus_token: str | None = Header(None)):
+async def save_dom(payload: Request):
     try:
-        if x_nexus_token != BACKEND_TOKEN:
-            return JSONResponse({"ok": False, "reason": "invalid token"}, status_code=403)
-        payload = await req.json()
-        ts = int(time.time())
-        snippet = payload.get("dom_snippet", "")[:4000]
-        meta = {
-            "url": payload.get("current_url"),
-            "timestamp": payload.get("timestamp", ts)
-        }
-        filename = f"/app/data/dom_snippet_{ts}.html"
-        with open(filename, "w", encoding="utf-8") as f:
-            f.write(snippet)
-        print(f"[/api/dom] DOM saved snippet from [{meta['url']}]")
-        return {"ok": True}
+        data = await payload.json()
+        os.makedirs("/app/data/dom", exist_ok=True)
+        fname = f"/app/data/dom/dom_{int(__import__('time').time())}.html"
+        # If payload has 'dom' field save snippet, else store full JSON
+        if isinstance(data, dict) and data.get("dom"):
+            with open(fname, "w", encoding="utf-8") as f:
+                f.write(data.get("dom")[:200000])  # limit size
+        else:
+            with open(fname + ".json", "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+        return {"status": "ok", "saved": fname}
     except Exception as e:
-        print("[/api/dom] error:", e)
-        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+        return {"error": str(e)}
 
-
-# start selenium in background
-def start_selenium_thread():
-    try:
-        from selenium_core import start_selenium_loop
-        start_selenium_loop()
-    except Exception as e:
-        print("[main] Error starting selenium loop:", e)
-
+# Start Selenium background thread (import here to avoid circular import on startup)
 @app.on_event("startup")
 async def startup_event():
-    print("[main] Starting selenium thread...")
-    t = Thread(target=start_selenium_thread, daemon=True)
-    t.start()
+    # Importing here so module file can be easily replaced
+    try:
+        from selenium_core import start_selenium_loop
+        print("[main] Starting selenium thread...")
+        start_selenium_loop()
+    except Exception as e:
+        print("[main] Failed to start selenium thread:", e)
