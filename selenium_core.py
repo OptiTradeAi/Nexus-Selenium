@@ -1,196 +1,147 @@
 # selenium_core.py
-import os
 import time
 import threading
+import os
+import json
 import requests
-import traceback
-
 import undetected_chromedriver as uc
 from selenium.webdriver.common.by import By
-from selenium.common.exceptions import WebDriverException, NoSuchElementException, ElementClickInterceptedException
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 
 HB_URL = "https://www.homebroker.com/pt/sign-in"
-CHECK_INTERVAL = int(os.getenv("CHECK_INTERVAL", "10"))
-PAIR_SWITCH_INTERVAL = int(os.getenv("PAIR_SWITCH_INTERVAL", "30"))  # seconds between pair changes
-NEXUS_PUBLIC_URL = os.getenv("NEXUS_PUBLIC_URL", "https://nexus-selenium.onrender.com")
-NEXUS_TOKEN = os.getenv("NEXUS_TOKEN", os.getenv("TOKEN", "032318"))
+CHECK_INTERVAL = 8  # segundos entre iterações
+NEXUS_PUBLIC_URL = os.getenv("NEXUS_PUBLIC_URL", "http://localhost:10000")
+NEXUS_TOKEN = os.getenv("TOKEN", "032318")
 
-_selenium_thread = None
-_selenium_running = False
 
-def send_to_backend(path, payload):
-    url = NEXUS_PUBLIC_URL.rstrip("/") + path
+def safe_post(endpoint: str, payload: dict):
     try:
-        r = requests.post(url, json=payload, headers={"X-Nexus-Token": NEXUS_TOKEN}, timeout=8)
+        headers = {"X-Nexus-Token": NEXUS_TOKEN}
+        r = requests.post(f"{NEXUS_PUBLIC_URL}{endpoint}", json=payload, headers=headers, timeout=8)
         return r.status_code, r.text
     except Exception as e:
-        print("[selenium_core] Error sending to backend:", e)
         return None, str(e)
 
-def attempt_find_pair_elements(driver):
-    """
-    Try a few generic selectors to find a list of pairs on the page.
-    Returns list of web elements (may be empty).
-    """
-    candidates = []
-    # common heuristics: list items, buttons with pair text, elements that contain 'OTC' or '/', etc.
+
+def save_cookies_file(driver):
     try:
-        # all buttons or anchors
-        elems = driver.find_elements(By.CSS_SELECTOR, "button, a, li, div")
-        for e in elems:
-            try:
-                txt = e.text or ""
-                if any(k in txt.upper() for k in ["OTC", "/", "USD", "EUR", "BTC", "ETH", "BRL"]):
-                    candidates.append(e)
-            except:
-                continue
+        cookies = driver.get_cookies()
+        with open("/app/data/cookies.json", "w", encoding="utf-8") as f:
+            json.dump(cookies, f, ensure_ascii=False, indent=2)
+        print("[selenium_core] Cookies saved to /app/data/cookies.json")
     except Exception as e:
-        print("[selenium_core] pair find exception:", e)
-    return candidates
+        print("[selenium_core] Error saving cookies:", e)
 
-def run_selenium():
-    global _selenium_running
-    print("[selenium_core] Starting Chromium via undetected-chromedriver...")
-    options = uc.ChromeOptions()
-    options.add_argument("--headless=new")
-    options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--window-size=1280,900")
-    # minimize detection
-    options.add_argument("--disable-blink-features=AutomationControlled")
-    driver = None
-    try:
-        driver = uc.Chrome(options=options)
-    except Exception as e:
-        print("[selenium_core] Failed starting Chrome:", e)
-        return
-
-    _selenium_running = True
-    last_pair_switch = time.time()
-    try:
-        print("[selenium_core] Opening HomeBroker login page...")
-        driver.get(HB_URL)
-    except Exception as e:
-        print("[selenium_core] Error loading HB URL:", e)
-
-    # Wait for user login or detection of logged-in state
-    logged_in = False
-    print("[selenium_core] Waiting for login (monitoring URL/title)...")
-    while True:
-        try:
-            cur = driver.current_url
-            title = driver.title or ""
-            page = driver.page_source or ""
-            # detect by URL change or presence of dashboard keywords
-            if any(x in cur for x in ["/invest", "/dashboard", "/home"]) or any(k.lower() in page.lower() for k in ["saldo", "minhas operações", "operar", "mercado", "otc"]):
-                logged_in = True
-                print("[selenium_core] Login detected. Current URL:", cur)
-                break
-        except Exception:
-            pass
-        time.sleep(2)
-
-    # main loop: extract and send, plus activity to avoid logout
-    while True:
-        try:
-            cur_url = driver.current_url
-            title = driver.title or ""
-            dom = driver.page_source or ""
-            snippet = dom[:15000]
-
-            # try to guess current pair from title or visible labels
-            current_pair = None
-            try:
-                if "/" in title:
-                    current_pair = title.split("|")[0].strip()
-                # attempt to find a visible element with pair info
-                elems = driver.find_elements(By.CSS_SELECTOR, "div, span, h1, h2")
-                for e in elems[:200]:
-                    try:
-                        t = (e.text or "").strip()
-                        if t and ("/" in t and len(t) < 30):
-                            current_pair = t
-                            break
-                    except:
-                        continue
-            except Exception:
-                pass
-
-            payload = {
-                "timestamp": time.time(),
-                "current_url": cur_url,
-                "title": title,
-                "pair": current_pair,
-                "dom_snippet": snippet,
-                "note": "selenium_probe"
-            }
-
-            status, resp = send_to_backend("/capture", payload)
-            if status:
-                print(f"[selenium_core] Sent capture -> /capture (status={status}) pair={current_pair}")
-            else:
-                print(f"[selenium_core] Send capture failed: {resp}")
-
-            # also post a fuller DOM to /api/dom for debugging (rate-limited)
-            try:
-                dom_payload = {"timestamp": time.time(), "current_url": cur_url, "dom": dom[:200000]}
-                s, r = send_to_backend("/api/dom", dom_payload)
-                if s:
-                    print(f"[selenium_core] DOM posted to /api/dom (status={s})")
-            except Exception as e:
-                print("[selenium_core] error posting dom:", e)
-
-            # Activity: switch pair every PAIR_SWITCH_INTERVAL to avoid inactivity logout
-            if time.time() - last_pair_switch > PAIR_SWITCH_INTERVAL:
-                last_pair_switch = time.time()
-                # try to find clickable pair elements
-                candidates = attempt_find_pair_elements(driver)
-                if candidates:
-                    # choose one that's visible and clickable, rotate randomly/round-robin
-                    try:
-                        # pick candidate not equal to current text if possible
-                        chosen = None
-                        for c in candidates:
-                            try:
-                                txt = (c.text or "").strip()
-                                if txt and txt != current_pair and len(txt) < 40:
-                                    chosen = c
-                                    break
-                            except:
-                                continue
-                        if not chosen and candidates:
-                            chosen = candidates[0]
-                        if chosen:
-                            try:
-                                chosen.click()
-                                print("[selenium_core] Clicked candidate to change pair ->", (chosen.text or "")[:40])
-                                time.sleep(3)  # wait for page to update
-                            except (ElementClickInterceptedException, WebDriverException) as e:
-                                # try JS click
-                                try:
-                                    driver.execute_script("arguments[0].click();", chosen)
-                                    print("[selenium_core] JS-clicked candidate")
-                                except Exception as e2:
-                                    print("[selenium_core] click failed:", e, e2)
-                    except Exception as e:
-                        print("[selenium_core] pair switch error:", e)
-                else:
-                    print("[selenium_core] No pair candidates found to click (will retry later)")
-
-            time.sleep(CHECK_INTERVAL)
-        except Exception as e:
-            print("[selenium_core] Loop exception:", e)
-            traceback.print_exc()
-            time.sleep(5)
 
 def start_selenium_loop():
-    global _selenium_thread
-    if _selenium_thread and _selenium_thread.is_alive():
-        print("[selenium_core] Thread already running")
-        return
-    _selenium_thread = threading.Thread(target=run_selenium, daemon=True)
-    _selenium_thread.start()
+    thread = threading.Thread(target=run_selenium, daemon=True)
+    thread.start()
     print("[selenium_core] Selenium thread started.")
 
-def is_selenium_running():
-    return _selenium_running
+
+def run_selenium():
+    print("[selenium_core] Starting Chromium (non-headless, persistent profile)...")
+
+    options = uc.ChromeOptions()
+    # run visible (not headless) so we can later add VNC/noVNC if needed:
+    # headless disabled intentionally to preserve real rendering
+    # options.add_argument("--headless=new")  # DO NOT enable
+    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--window-size=1400,900")
+    # persistent profile so cookies/session are stored
+    profile_dir = "/app/data/chrome_profile"
+    os.makedirs(profile_dir, exist_ok=True)
+    options.add_argument(f"--user-data-dir={profile_dir}")
+
+    # optional: remote debugging port
+    options.add_argument("--remote-debugging-port=9222")
+
+    driver = uc.Chrome(options=options)
+
+    print("[selenium_core] Opening HomeBroker login page...")
+    try:
+        driver.get(HB_URL)
+    except Exception as e:
+        print("[selenium_core] driver.get error:", e)
+
+    logged_in = False
+
+    # Wait loop: if manual login occurs in browser session (you or VNC), this thread will detect by URL or keywords
+    while True:
+        try:
+            current_url = driver.current_url
+            page_source = driver.page_source
+            timestamp = time.time()
+
+            # quick check for login: URL changed or keywords present
+            logged_keywords = ["Saldo", "Depósito", "Minhas Operações", "OTC", "Operar", "Carteira"]
+            found_keyword = any(kw in page_source for kw in logged_keywords)
+            if ("invest" in current_url) or found_keyword:
+                if not logged_in:
+                    print("[selenium_core] Login detected (url/keyword). Starting data collection.")
+                logged_in = True
+            else:
+                logged_in = False
+
+            # prepare DOM snippet
+            dom_snippet = page_source[:5000]
+
+            payload_dom = {
+                "timestamp": timestamp,
+                "current_url": current_url,
+                "dom_snippet": dom_snippet
+            }
+            # send DOM snippet to backend /api/dom
+            status, text = safe_post("/api/dom", payload_dom)
+            if status:
+                print(f"[selenium_core] DOM posted to /api/dom (status={status})")
+            else:
+                print(f"[selenium_core] DOM post failed: {text}")
+
+            # also send a capture event summarizing state
+            capture = {
+                "event": "login_state" if logged_in else "not_logged",
+                "url": current_url,
+                "timestamp": timestamp,
+                "pair": None
+            }
+            status2, text2 = safe_post("/capture", capture)
+            if status2:
+                print(f"[selenium_core] Sent capture -> /capture (status={status2}) pair=None")
+            else:
+                print(f"[selenium_core] Capture post failed: {text2}")
+
+            # Save cookies periodically (for debug / fallback)
+            save_cookies_file(driver)
+
+            # If we're logged in, try to find a pair selector and click to avoid inactivity
+            if logged_in:
+                try:
+                    # Custom heuristic — adjust selectors to match correct elements of HomeBroker
+                    # Example: find elements with OTC or pair labels - this is generic and may require tuning
+                    # We'll look for links/buttons that include 'OTC' or currency symbols
+                    buttons = driver.find_elements(By.XPATH, "//button|//a|//div")
+                    clicked = False
+                    for el in buttons:
+                        text = (el.text or "").strip()
+                        if text and ("OTC" in text or "/" in text or "USD" in text or "EUR" in text or "BTC" in text or "PAR" in text):
+                            try:
+                                el.click()
+                                clicked = True
+                                print(f"[selenium_core] Clicked candidate pair element: {text[:40]}")
+                                time.sleep(1)
+                                break
+                            except Exception:
+                                continue
+                    if not clicked:
+                        print("[selenium_core] No pair candidates found to click (will retry later)")
+                except Exception as e:
+                    print("[selenium_core] Error trying to click pairs:", e)
+
+            # loop sleep
+            time.sleep(CHECK_INTERVAL)
+        except Exception as e:
+            print("[selenium_core] Error in main loop:", e)
+            time.sleep(5)
