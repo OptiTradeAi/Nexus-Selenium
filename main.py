@@ -1,65 +1,95 @@
-from fastapi import FastAPI, Header, Request, HTTPException
+from fastapi import FastAPI, Request, Header
 from fastapi.responses import RedirectResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 import os
-import threading
+import json
+from threading import Thread
+import time
 
-# Import start function from selenium_core
-from selenium_core import start_selenium_loop, is_selenium_running
+# token para validar origem
+BACKEND_TOKEN = os.getenv("TOKEN", "032318")
 
 app = FastAPI()
 
-# Token (env default)
-BACKEND_TOKEN = os.getenv("TOKEN", "032318")
-NEXUS_PUBLIC_URL = os.getenv("NEXUS_PUBLIC_URL", f"https://{os.getenv('RENDER_SERVICE_NAME','nexus-selenium.onrender.com')}")
-NEXUS_TOKEN = os.getenv("NEXUS_TOKEN", BACKEND_TOKEN)
-
-# mount static folder
+# serve arquivos estáticos (loader, scanner etc)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
+# endpoints simples
 @app.get("/")
 def root():
-    # redirect user to homebroker sign-in (this is the clickable link idea)
+    # redireciona para a HomeBroker login
     return RedirectResponse("https://www.homebroker.com/pt/sign-in")
 
 @app.get("/ping")
 def ping():
-    return {"status": "online", "token": BACKEND_TOKEN, "selenium_running": is_selenium_running()}
+    return {"status": "online", "token": BACKEND_TOKEN}
 
-# capture endpoint receives scanner payloads
+# endpoint que o scanner + selenium envia (dados de captura / eventos)
 @app.post("/capture")
-async def capture(request: Request, x_nexus_token: str | None = Header(None)):
-    if x_nexus_token != NEXUS_TOKEN:
-        raise HTTPException(status_code=403, detail="Invalid token")
-    payload = await request.json()
-    # Save for debugging
+async def capture(req: Request, x_nexus_token: str | None = Header(None)):
     try:
-        ts = payload.get("timestamp") or payload.get("time") or None
-        fname = f"/app/data/capture_{int(__import__('time').time())}.json"
-        with open(fname, "w", encoding="utf-8") as f:
-            import json
-            json.dump({"received": payload}, f, ensure_ascii=False, indent=2)
+        if x_nexus_token != BACKEND_TOKEN:
+            return JSONResponse({"ok": False, "reason": "invalid token"}, status_code=403)
+        payload = await req.json()
+        # salva payload para debug
+        ts = int(time.time())
+        filename = f"/app/data/capture_{ts}.json"
+        with open(filename, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False, indent=2)
+        print(f"[/capture] Received payload: {payload.get('event','no-event')} url: [{payload.get('url')}]")
+        return {"ok": True}
     except Exception as e:
-        print("Error saving capture:", e)
-    print("[/capture] Received payload:", payload.get("event", "no-event"), "url:", payload.get("url") or payload.get("current_url"))
-    return JSONResponse({"status": "captured"})
+        print("[/capture] error:", e)
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
 
-# optional endpoint to receive DOM posts from selenium if needed
+# endpoint para salvar cookies (opcional — ativar apenas com consentimento)
+@app.post("/save_cookies")
+async def save_cookies(req: Request, x_nexus_token: str | None = Header(None)):
+    try:
+        if x_nexus_token != BACKEND_TOKEN:
+            return JSONResponse({"ok": False, "reason": "invalid token"}, status_code=403)
+        payload = await req.json()
+        with open("/app/data/saved_cookies.json", "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False, indent=2)
+        print("[/save_cookies] Cookies/localStorage saved.")
+        return {"ok": True}
+    except Exception as e:
+        print("[/save_cookies] error:", e)
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+# API endpoint to accept DOM snippets saved by Selenium
 @app.post("/api/dom")
-async def api_dom(request: Request, x_nexus_token: str | None = Header(None)):
-    if x_nexus_token != NEXUS_TOKEN:
-        raise HTTPException(status_code=403, detail="Invalid token")
-    payload = await request.json()
+async def api_dom(req: Request, x_nexus_token: str | None = Header(None)):
     try:
-        with open("/app/data/last_dom.html", "w", encoding="utf-8") as f:
-            f.write(payload.get("dom", "")[:200000])  # keep snippet
+        if x_nexus_token != BACKEND_TOKEN:
+            return JSONResponse({"ok": False, "reason": "invalid token"}, status_code=403)
+        payload = await req.json()
+        ts = int(time.time())
+        snippet = payload.get("dom_snippet", "")[:4000]
+        meta = {
+            "url": payload.get("current_url"),
+            "timestamp": payload.get("timestamp", ts)
+        }
+        filename = f"/app/data/dom_snippet_{ts}.html"
+        with open(filename, "w", encoding="utf-8") as f:
+            f.write(snippet)
+        print(f"[/api/dom] DOM saved snippet from [{meta['url']}]")
+        return {"ok": True}
     except Exception as e:
-        print("Error saving dom:", e)
-    print("[/api/dom] DOM saved snippet from", payload.get("current_url"))
-    return {"status": "ok"}
+        print("[/api/dom] error:", e)
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
 
-# start selenium loop on startup
+
+# start selenium in background
+def start_selenium_thread():
+    try:
+        from selenium_core import start_selenium_loop
+        start_selenium_loop()
+    except Exception as e:
+        print("[main] Error starting selenium loop:", e)
+
 @app.on_event("startup")
 async def startup_event():
-    print("[main] Startup event: starting selenium loop thread")
-    start_selenium_loop()
+    print("[main] Starting selenium thread...")
+    t = Thread(target=start_selenium_thread, daemon=True)
+    t.start()
