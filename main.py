@@ -81,4 +81,33 @@ async def api_dom(request: Request):
 
 
 @app.get("/captures/last")
-def captures_last
+def captures_last(n: int = 10):
+    lines = []
+    try:
+        if CAPTURE_FILE.exists():
+            with open(CAPTURE_FILE, "r", encoding="utf-8") as f:
+                all_lines = f.readlines()
+            for l in all_lines[-n:]:
+                try:
+                    lines.append(json.loads(l))
+                except:
+                    lines.append({"raw": l})
+    except Exception as e:
+        return {"status": "error", "msg": str(e)}
+    return {"status": "ok", "count": len(lines), "last": lines}
+
+
+try:
+    from selenium_core import start_selenium_thread
+except Exception as e:
+    start_selenium_thread = None
+    print("[main] selenium_core not importable:", e)
+
+
+@app.on_event("startup")
+async def startup_event():
+    if callable(start_selenium_thread):
+        print("[main] Starting selenium thread...")
+        start_selenium_thread()
+    else:
+        print("[main] Selenium thread not started.")
