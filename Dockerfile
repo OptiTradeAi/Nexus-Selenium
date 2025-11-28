@@ -5,39 +5,32 @@ FROM python:3.11-slim
 ENV DEBIAN_FRONTEND=noninteractive
 WORKDIR /app
 
-# Dependências essenciais
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    wget gnupg unzip curl \
-    libu2f-udev libvulkan1 \
-    libasound2 libnss3 libxss1 libatk1.0-0 libcups2 libdrm2 \
-    libx11-6 libxcomposite1 libxdamage1 libxrandr2 \
-    libgbm1 libpango-1.0-0 libpangocairo-1.0-0 \
-    libatk-bridge2.0-0 libxkbcommon0 libgtk-3-0 \
+    wget unzip curl gnupg \
+    libglib2.0-0 libnss3 libxss1 libasound2 libatk1.0-0 libatk-bridge2.0-0 \
+    libx11-6 libxcomposite1 libxdamage1 libxrandr2 libgbm1 \
+    libpango-1.0-0 libcairo2 libdrm2 libxkbcommon0 libgtk-3-0 \
     && rm -rf /var/lib/apt/lists/*
 
-# --------------------------
-# Instala Google Chrome estável
-# --------------------------
-RUN wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb && \
-    apt-get update && apt-get install -y ./google-chrome-stable_current_amd64.deb && \
-    rm google-chrome-stable_current_amd64.deb
+# ------------------------------------------------------------
+# INSTALAR GOOGLE CHROME (versão para TESTING - compatível)
+# ------------------------------------------------------------
+RUN CHROME_VERSION="142.0.7444.175" && \
+    wget -q "https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/$CHROME_VERSION/linux64/chrome-linux64.zip" && \
+    unzip chrome-linux64.zip && rm chrome-linux64.zip && \
+    mv chrome-linux64 /opt/chrome && chmod -R 777 /opt/chrome
 
-# Pega versão do Chrome
-RUN CHROME_VERSION=$(google-chrome --version | grep -oP "[0-9\.]+") && \
-    echo "Chrome version: $CHROME_VERSION"
+ENV CHROME_BIN=/opt/chrome/chrome
 
-# --------------------------
-# Instalar ChromeDriver compatível
-# --------------------------
-RUN CHROME_VERSION=$(google-chrome --version | grep -oP "[0-9\.]+") && \
-    MAJOR_VERSION=$(echo $CHROME_VERSION | cut -d. -f1) && \
-    wget -q "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_$MAJOR_VERSION" -O LATEST && \
-    CHROMEDRIVER_VERSION=$(cat LATEST) && \
-    wget -q "https://chromedriver.storage.googleapis.com/$CHROMEDRIVER_VERSION/chromedriver_linux64.zip" && \
-    unzip chromedriver_linux64.zip && rm chromedriver_linux64.zip LATEST && \
-    mv chromedriver /usr/local/bin/chromedriver && chmod +x /usr/local/bin/chromedriver
+# ------------------------------------------------------------
+# INSTALAR CHROMEDRIVER COMPATÍVEL COM CHROME 142
+# ------------------------------------------------------------
+RUN CHROME_VERSION="142.0.7444.175" && \
+    wget -q "https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/$CHROME_VERSION/linux64/chromedriver-linux64.zip" && \
+    unzip chromedriver-linux64.zip && rm chromedriver-linux64.zip && \
+    mv chromedriver-linux64/chromedriver /usr/local/bin/chromedriver && \
+    chmod +x /usr/local/bin/chromedriver && rm -rf chromedriver-linux64
 
-ENV CHROME_BIN=/usr/bin/google-chrome
 ENV CHROMEDRIVER_PATH=/usr/local/bin/chromedriver
 
 COPY requirements.txt /app/requirements.txt
