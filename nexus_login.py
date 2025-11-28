@@ -1,47 +1,105 @@
 import json
+import os
 import time
 from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import NoSuchElementException, ElementNotInteractableException
 
-class NexusLogin:
-    def __init__(self, driver, selectors_file):
-        self.driver = driver
-        self.selectors_file = selectors_file
-        self.wait = WebDriverWait(driver, 30)
-        self.selectors = self.load_selectors()
 
-    def load_selectors(self):
-        with open(self.selectors_file, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-        selectors = data.get('selectors', {})
-        return selectors
+def try_selectors(driver, selectors, value=None, click=False):
+    """
+    Testa múltiplos seletores (CSS/XPATH).
+    - Se value != None → insere texto.
+    - Se click=True → clica no elemento.
+    """
+    for selector in selectors:
+        try:
+            if selector.startswith("/"):
+                el = driver.find_element(By.XPATH, selector)
+            else:
+                el = driver.find_element(By.CSS_SELECTOR, selector)
 
-    def try_login(self, email, password, login_url):
-        self.driver.get(login_url)
-        time.sleep(3)
+            if click:
+                el.click()
+                return True
 
-        email_selector = self.selectors.get('email')
-        password_selector = self.selectors.get('password')
-        submit_selector = self.selectors.get('submit')
+            if value is not None:
+                el.clear()
+                el.send_keys(value)
+                return True
 
-        if not all([email_selector, password_selector, submit_selector]):
-            raise Exception("Seletores incompletos no arquivo JSON")
+        except Exception:
+            continue
 
-        email_elem = self.wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, email_selector)))
-        email_elem.clear()
-        email_elem.send_keys(email)
+    return False
 
-        password_elem = self.wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, password_selector)))
-        password_elem.clear()
-        password_elem.send_keys(password)
 
-        submit_elem = self.wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, submit_selector)))
-        submit_elem.click()
+def load_selectors():
+    """Carrega JSON de seletores."""
+    path = "/app/data/nexus_selectors.json"
+    if not os.path.exists(path):
+        print("[nexus_login] ERRO: nexus_selectors.json não encontrado!")
+        return None
 
-        time.sleep(5)
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)
 
-        if "dashboard" in self.driver.current_url.lower():
-            return {"login": True, "detail": "Login efetuado com sucesso"}
-        else:
-            return {"login": False, "detail": "Falha no login"}
+
+def perform_login(driver):
+    """
+    Login usando ENV + seletores JSON.
+    Retorna True se logar, False se falhar.
+    """
+
+    selectors = load_selectors()
+    if selectors is None:
+        return False
+
+    email = os.getenv("NEXUS_EMAIL")
+    password = os.getenv("NEXUS_PASSWORD")
+
+    if not email or not password:
+        print("[nexus_login] NEXUS_EMAIL/NEXUS_PASSWORD ausentes no ENV!")
+        return False
+
+    print("[nexus_login] Tentando preencher email...")
+
+    if not try_selectors(driver, selectors["email"], value=email):
+        print("[nexus_login] Falha ao preencher email.")
+        # tenta fallback procurando manualmente
+        try:
+            el = driver.find_element(By.CSS_SELECTOR, "input[type='email']")
+            el.send_keys(email)
+        except:
+            pass
+
+    time.sleep(1)
+
+    print("[nexus_login] Tentando preencher senha...")
+
+    if not try_selectors(driver, selectors["password"], value=password):
+        print("[nexus_login] Falha ao preencher senha.")
+
+    time.sleep(1)
+
+    print("[nexus_login] Tentando clicar no botão LOGIN...")
+
+    if not try_selectors(driver, selectors["submit"], click=True):
+        print("[nexus_login] Falha ao clicar no botão submit.")
+
+    time.sleep(4)
+
+    # Verifica se o login deu certo
+    for marker in selectors["post_login_markers"]:
+        try:
+            if marker.startswith("//"):
+                driver.find_element(By.XPATH, marker)
+            else:
+                driver.find_element(By.CSS_SELECTOR, marker)
+
+            print("[nexus_login] Login confirmado pela presença do marcador.")
+            return True
+        except:
+            continue
+
+    print("[nexus_login] Login não confirmado.")
+    return False
