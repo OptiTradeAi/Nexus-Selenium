@@ -1,57 +1,64 @@
-import time
 import os
+import threading
+import time
 from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
-
+from selenium.webdriver.chrome.service import Service
 
 LOGIN_URL = "https://www.homebroker.com/pt/sign-in"
 
 
 def start_selenium_thread():
-    import threading
     t = threading.Thread(target=run_selenium, daemon=True)
     t.start()
 
 
 def run_selenium():
-    print("[selenium_core] Starting Chrome...")
+    print("[selenium] Starting Chrome...")
 
-    chrome_bin = os.getenv("CHROME_BIN", "/usr/bin/google-chrome")
-    chrome_driver_path = os.getenv("CHROMEDRIVER_PATH", "/usr/local/bin/chromedriver")
+    chrome_path = os.getenv("CHROME_BIN", "/usr/bin/google-chrome")
+    chromedriver_path = os.getenv("CHROMEDRIVER_PATH", "/usr/local/bin/chromedriver")
 
     options = Options()
-    options.binary_location = chrome_bin
+    options.binary_location = chrome_path
 
+    # HEADLESS LITE
     options.add_argument("--headless=new")
+    options.add_argument("--disable-gpu")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--disable-gpu")
-    options.add_argument("--window-size=1366,768")
+    options.add_argument("--disable-software-rasterizer")
+    options.add_argument("--disable-extensions")
+    options.add_argument("--disable-dev-tools")
+    options.add_argument("--window-size=1280,800")
 
-    service = Service(executable_path=chrome_driver_path)
+    service = Service(executable_path=chromedriver_path)
 
     try:
         driver = webdriver.Chrome(service=service, options=options)
-        print("[selenium_core] Chrome iniciado com sucesso!")
+        print("[selenium] Chrome started OK")
     except Exception as e:
-        print("❌ ERRO ao iniciar o Chrome")
-        print(e)
+        print("[selenium] Chrome FAILED:", e)
         return
 
-    driver.get(LOGIN_URL)
-    print("[selenium_core] Página carregada:", LOGIN_URL)
+    # OPEN LOGIN PAGE
+    try:
+        driver.get(LOGIN_URL)
+        print("[selenium] Loaded URL:", LOGIN_URL)
+    except:
+        print("[selenium] Failed to load login page")
+        return
 
-    # TODO: LOGIN será adicionado quando tivermos os seletores corretos.
-
+    # KEEP-ALIVE LOOP
     while True:
         try:
-            print("[selenium_core] Alive | URL:", driver.current_url)
-        except:
-            print("[selenium_core] Navegador caiu, encerrando.")
+            url = driver.current_url
+            print("[selenium] Alive | URL:", url)
+        except Exception as e:
+            print("[selenium] Driver crashed:", e)
             break
 
-        time.sleep(10)
+        time.sleep(8)
 
     driver.quit()
+    print("[selenium] Closed")
