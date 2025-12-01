@@ -1,90 +1,51 @@
-# -------------------------------------------------------------
-# BASE IMAGE
-# -------------------------------------------------------------
 FROM python:3.11-slim
 
-# -------------------------------------------------------------
-# SYSTEM PACKAGES
-# -------------------------------------------------------------
+# ---------------------------
+# Instala dependências do Chrome
+# ---------------------------
 RUN apt-get update && apt-get install -y \
-    wget \
-    unzip \
-    gnupg \
-    curl \
-    apt-transport-https \
-    ca-certificates \
-    fonts-liberation \
-    libappindicator3-1 \
-    libasound2 \
-    libatk-bridge2.0-0 \
-    libc6 \
-    libcairo2 \
-    libcups2 \
-    libdbus-1-3 \
-    libexpat1 \
-    libfontconfig1 \
-    libgbm1 \
-    libgcc1 \
-    libglib2.0-0 \
-    libgtk-3-0 \
-    libnspr4 \
-    libnss3 \
-    libpango-1.0-0 \
-    libu2f-udev \
-    libx11-6 \
-    libx11-xcb1 \
-    libxcb1 \
-    libxcomposite1 \
-    libxcursor1 \
-    libxdamage1 \
-    libxext6 \
-    libxfixes3 \
-    libxi6 \
-    libxrandr2 \
-    libxrender1 \
-    libxss1 \
-    libxtst6 \
-    xdg-utils \
+    wget unzip curl gnupg \
+    libnss3 libgconf-2-4 libasound2 libatk1.0-0 libcups2 libxss1 \
+    libxcomposite1 libxrandr2 libxdamage1 libxcursor1 libgtk-3-0 \
+    libx11-xcb1 libxtst6 libgbm1 libpango-1.0-0 libpangocairo-1.0-0 \
+    libxshmfence1 libxi6 libxkbcommon0 fonts-liberation \
     && rm -rf /var/lib/apt/lists/*
 
-# -------------------------------------------------------------
-# INSTALL GOOGLE CHROME
-# -------------------------------------------------------------
-RUN wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb \
-    && apt-get update \
-    && apt-get install -y ./google-chrome-stable_current_amd64.deb \
+# ---------------------------
+# Instala o Google Chrome
+# ---------------------------
+RUN wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb \
+    && apt-get update && apt-get install -y ./google-chrome-stable_current_amd64.deb || true \
     && rm google-chrome-stable_current_amd64.deb
 
-# -------------------------------------------------------------
-# INSTALL MATCHING CHROMEDRIVER
-# -------------------------------------------------------------
-RUN CHROME_VERSION=$(google-chrome --version | awk '{print $3}' | cut -d'.' -f1) && \
-    DRIVER_VERSION=$(wget -qO- https://chromedriver.storage.googleapis.com/LATEST_RELEASE_${CHROME_VERSION}) && \
-    wget -q https://chromedriver.storage.googleapis.com/${DRIVER_VERSION}/chromedriver_linux64.zip && \
-    unzip chromedriver_linux64.zip && \
-    mv chromedriver /usr/local/bin/ && \
-    chmod +x /usr/local/bin/chromedriver && \
-    rm chromedriver_linux64.zip
+# ---------------------------
+# Instala o ChromeDriver compatível
+# ---------------------------
+RUN CHROME_VERSION=$(google-chrome --version | sed 's/[^0-9.]//g') && \
+    CHROMEDRIVER_VERSION=$(curl -s "https://chromedriver.storage.googleapis.com/LATEST_RELEASE") && \
+    wget -O /tmp/chromedriver.zip "https://chromedriver.storage.googleapis.com/${CHROMEDRIVER_VERSION}/chromedriver_linux64.zip" && \
+    unzip /tmp/chromedriver.zip -d /usr/local/bin/ && chmod +x /usr/local/bin/chromedriver
 
-# -------------------------------------------------------------
-# COPY PROJECT FILES
-# -------------------------------------------------------------
+# ---------------------------
+# Copia os arquivos
+# ---------------------------
 WORKDIR /app
-COPY requirements.txt .
-COPY main.py .
-COPY selenium_core.py .
+COPY . .
 
-# -------------------------------------------------------------
-# INSTALL PYTHON DEPENDENCIES
-# -------------------------------------------------------------
+# ---------------------------
+# Instala dependências Python
+# ---------------------------
 RUN pip install --no-cache-dir -r requirements.txt
 
-# -------------------------------------------------------------
-# EXPOSE PORT
-# -------------------------------------------------------------
+# ---------------------------
+# Exporta as variáveis
+# ---------------------------
+ENV CHROME_BIN=/usr/bin/google-chrome
+ENV CHROMEDRIVER_PATH=/usr/local/bin/chromedriver
+ENV PYTHONUNBUFFERED=1
+
+# Porta da aplicação
 EXPOSE 10000
 
-# -------------------------------------------------------------
-# RUN APPLICATION
-# -------------------------------------------------------------
+# Start
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "10000"]
